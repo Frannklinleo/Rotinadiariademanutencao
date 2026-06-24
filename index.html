@@ -1,0 +1,1587 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0E1116" />
+<title>Rotina diária de manutenção</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Rotina" />
+
+<!-- Tailwind (utilitário, via CDN) -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- React + ReactDOM -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+
+<!-- Babel standalone, para compilar o JSX direto no navegador -->
+<script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
+
+<!-- Lucide icons (build UMD) -->
+<script src="https://unpkg.com/lucide@0.462.0/dist/umd/lucide.min.js"></script>
+
+<style>
+  html, body, #root {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background: #0E1116;
+  }
+  * { -webkit-tap-highlight-color: transparent; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useMemo, useRef, useEffect } = React;
+
+// ----------------------------------------------------------------------------
+// Ícones (mapeados a partir do build UMD do lucide, expostos em window.lucide.icons
+// como componentes prontos via lucide.createElement, então criamos wrappers React)
+// ----------------------------------------------------------------------------
+function makeIcon(name) {
+  return function Icon({ size = 16, strokeWidth = 2, color, style, className }) {
+    const ref = useRef(null);
+    useEffect(() => {
+      if (!ref.current) return;
+      ref.current.innerHTML = "";
+      try {
+        const iconNode = window.lucide && window.lucide.icons && window.lucide.icons[name];
+        if (!iconNode) return;
+        const svgEl = window.lucide.createElement(iconNode, {
+          width: size,
+          height: size,
+          "stroke-width": strokeWidth,
+          ...(color ? { stroke: color } : {}),
+        });
+        svgEl.style.display = "block";
+        ref.current.appendChild(svgEl);
+      } catch (e) {
+        // Ícone indisponível nesta versão do lucide; falha silenciosa (não bloqueia o app)
+      }
+    }, [size, strokeWidth, color]);
+    return <span ref={ref} className={className} style={{ display: "inline-flex", color, ...style }} />;
+  };
+}
+
+const Snowflake = makeIcon("Snowflake");
+const FlaskConical = makeIcon("FlaskConical");
+const GaugeCircle = makeIcon("GaugeCircle");
+const Layers = makeIcon("Layers");
+const Flame = makeIcon("Flame");
+const Factory = makeIcon("Factory");
+const Cog = makeIcon("Cog");
+const Wrench = makeIcon("Wrench");
+const Boxes = makeIcon("Boxes");
+const ArrowLeftRight = makeIcon("ArrowLeftRight");
+const Cuboid = makeIcon("Box");
+const Container = makeIcon("Container");
+const Wind = makeIcon("Wind");
+const ClipboardList = makeIcon("ClipboardList");
+const ChevronLeft = makeIcon("ChevronLeft");
+const Check = makeIcon("Check");
+const MessageSquarePlus = makeIcon("MessageSquarePlus");
+const Save = makeIcon("Save");
+const FileText = makeIcon("FileText");
+const Send = makeIcon("Send");
+const X = makeIcon("X");
+const AlertTriangle = makeIcon("AlertTriangle");
+const CheckCircle2 = makeIcon("CheckCircle2");
+const Circle = makeIcon("Circle");
+const Download = makeIcon("Download");
+const Zap = makeIcon("Zap");
+const ScanLine = makeIcon("ScanLine");
+const AlertOctagon = makeIcon("AlertOctagon");
+const AirVent = makeIcon("AirVent");
+const Lightbulb = makeIcon("Lightbulb");
+const Printer = makeIcon("Printer");
+const Settings2 = makeIcon("Settings2");
+const Camera = makeIcon("Camera");
+const ImageIcon = makeIcon("Image");
+const Trash2 = makeIcon("Trash2");
+
+</script>
+<script type="text/babel" data-presets="react">
+
+// ----------------------------------------------------------------------------
+// DADOS DA ROTINA
+// ----------------------------------------------------------------------------
+
+// ----------------------------------------------------------------------------
+// TEMAS
+// ----------------------------------------------------------------------------
+
+const TEMAS = {
+  mecanica: {
+    label: "Mecânica",
+    accent: "#F5A623",
+    accentSoft: "rgba(245,166,35,0.12)",
+    accentSoft2: "rgba(245,166,35,0.08)",
+    accentBorder: "rgba(245,166,35,0.35)",
+    accentRgbLow: "rgba(245,166,35,0.15)",
+    gradient: "linear-gradient(135deg, #F5A623, #E0941A)",
+    glow: "rgba(245,166,35,0.35)",
+  },
+  eletrica: {
+    label: "Elétrica",
+    accent: "#3B82F6",
+    accentSoft: "rgba(59,130,246,0.12)",
+    accentSoft2: "rgba(59,130,246,0.08)",
+    accentBorder: "rgba(59,130,246,0.35)",
+    accentRgbLow: "rgba(59,130,246,0.15)",
+    gradient: "linear-gradient(135deg, #3B82F6, #2563EB)",
+    glow: "rgba(59,130,246,0.35)",
+  },
+};
+
+// ----------------------------------------------------------------------------
+// DADOS DAS ROTINAS
+// ----------------------------------------------------------------------------
+
+const AREAS_MECANICA = [
+  {
+    id: 1,
+    nome: "Área do Chiller",
+    icon: Snowflake,
+    itens: [
+      "Verificar existência de vazamentos de água, funcionamento das bombas e existência de ruídos anormais.",
+    ],
+  },
+  {
+    id: 2,
+    nome: "Premix",
+    icon: FlaskConical,
+    itens: [
+      "Verificar existência de vazamentos na área dos tank farms, preparação de resinas.",
+      "Verificar o funcionamento das bombas e agitadores quanto ao funcionamento e ruídos anormais.",
+    ],
+  },
+  {
+    id: 3,
+    nome: "Skids e Hold Tanks",
+    icon: Container,
+    itens: [
+      "Verificar existência de vazamentos de resinas e TDI.",
+      "Verificar estado dos manômetros e trocá-los se necessário.",
+      "Verificar o funcionamento das bombas e agitadores quanto ao funcionamento e ruídos anormais.",
+    ],
+  },
+  {
+    id: 4,
+    nome: "Mezanino Linha 1",
+    icon: Layers,
+    itens: [
+      "Verificar existência de vazamentos de resina no skid de Resina A2.",
+      "Verificar estado dos manômetros e trocá-los se necessário.",
+      "Verificar o funcionamento das bombas e agitadores quanto ao funcionamento e ruídos anormais.",
+      "Verificação geral nas unidades hidráulicas DSF e USF à procura de anormalidades e vazamentos.",
+      "Funcionamento dos aparelhos de ar condicionado.",
+    ],
+  },
+  {
+    id: 6,
+    nome: "Queimadores",
+    icon: Flame,
+    itens: [
+      "Verificação geral nos queimadores quanto a vazamento de gás e funcionamento dos motores e estado de suas correias.",
+    ],
+  },
+  {
+    id: 7,
+    nome: "Linha 1",
+    icon: Factory,
+    itens: [
+      "Verificar a pressão do tensionador da corrente da linha se está em 5 bar e se o cilindro de ar de contingência está vazio.",
+      "Verificar o funcionamento do Line Tracker e completar o óleo do lubrifil.",
+      "Verificar o redutor da linha e circuito de refrigeração quanto ao nível de óleo e vazamentos.",
+    ],
+  },
+  {
+    id: 8,
+    nome: "Cabine de Injeção Linha 1",
+    icon: Cog,
+    itens: [
+      "Verificar a movimentação dos robôs e estado das mangueiras quanto a vazamentos e desgastes.",
+    ],
+  },
+  {
+    id: 9,
+    nome: "Produção Linha 1",
+    icon: Wrench,
+    itens: [
+      "Verificar o nível de óleo dos lubrificantes de ar comprimido das rebarbadeiras e nível de cola do retrabalho, completando-o se necessário.",
+      "Verificar a pressão do cilindro de compressão do quebra célula de rolos de metal.",
+    ],
+  },
+  {
+    id: 10,
+    nome: "Mezanino Linha 2",
+    icon: Boxes,
+    itens: [
+      "Verificar existência de vazamentos nos skids de resina e TDI.",
+      "Verificar estado dos manômetros e trocá-los se necessário.",
+      "Verificar o funcionamento das bombas e agitadores quanto ao funcionamento e ruídos anormais.",
+      "Verificação geral na unidade hidráulica à procura de anormalidades e vazamentos.",
+      "Funcionamento dos aparelhos de ar condicionado.",
+    ],
+  },
+  {
+    id: 11,
+    nome: "Linha 2",
+    icon: ArrowLeftRight,
+    itens: [
+      "Verificar o funcionamento do Carrossel quanto a trincas e barulho anormal.",
+      "Verificar funcionamento do abridor e fechador de moldes quanto a trincas.",
+    ],
+  },
+  {
+    id: 12,
+    nome: "Cabine de Injeção Linha 2",
+    icon: Cuboid,
+    itens: ["Verificar vazamentos nas mangueiras e cabeçote."],
+  },
+  {
+    id: 14,
+    nome: "Área de Utilidades",
+    icon: Wind,
+    itens: [
+      "Compressor Atlas Copco — verificar o nível de óleo.",
+      "Verificar a leitura no visor.",
+      "Verificar se os condensados são descarregados durante o funcionamento (Da).",
+      "Drenar os condensados (Dm).",
+      "Verificar o indicador de assistência do filtro de ar.",
+      "Verificar temperatura de trabalho do compressor SSR 100 Ingersoll Rand na IHM.",
+      "Verificar funcionamento dos secadores dos compressores.",
+      "Verificar o funcionamento do sistema de drenos.",
+      "Verificar o funcionamento do compressor SSR EP10 Ingersoll Rand de ar respirável.",
+      "Verificar o funcionamento das bombas de vácuo.",
+      "Verificar a existência de vazamentos nos maquinários.",
+    ],
+  },
+  {
+    id: 15,
+    nome: "ITS (Inventory Tracking System)",
+    icon: ClipboardList,
+    itens: [
+      'Verificar as preventivas que estão "abertas" no sistema e programar execução antes do vencimento.',
+    ],
+  },
+];
+
+const AREAS_ELETRICA = [
+  {
+    id: 1,
+    nome: "Monitor de ISO",
+    icon: ScanLine,
+    itens: [
+      "Realizar a preventiva diária dos monitores, utilizando o QR code.",
+      "Checar os displays LCD / LED sobre possíveis mensagens de erro.",
+      "Checar se o Andon apresenta alarme (amarelo) ou falha (vermelho).",
+    ],
+  },
+  {
+    id: 2,
+    nome: "Área do Chiller",
+    icon: Snowflake,
+    itens: [
+      "Verificar existência de vazamentos de água, alarmes, funcionamento das bombas e existência de ruídos anormais.",
+    ],
+  },
+  {
+    id: 3,
+    nome: "Premix",
+    icon: FlaskConical,
+    itens: [
+      "Verificar funcionamento do sistema de pesagem, falhas no monitor de TDI e existência de lâmpadas queimadas nos painéis elétricos.",
+    ],
+  },
+  {
+    id: 4,
+    nome: "Skids e Hold Tanks",
+    icon: Container,
+    itens: [
+      "Verificar funcionamento dos ventiladores dos unidrives.",
+      "Verificar funcionamento do ar-condicionado dos painéis dos unidrives e esvaziar a água condensada no reservatório.",
+      "Verificar existência de lâmpadas queimadas nos painéis elétricos.",
+    ],
+  },
+  {
+    id: 5,
+    nome: "Mezanino Linha 1",
+    icon: Layers,
+    itens: [
+      "Funcionamento dos aparelhos de ar-condicionado e existência de lâmpadas queimadas nos painéis elétricos.",
+    ],
+  },
+  {
+    id: 6,
+    nome: "Queimadores",
+    icon: Flame,
+    itens: [
+      "Verificação geral quanto ao funcionamento do sistema de chama, servomotor e existência de lâmpadas queimadas nos painéis elétricos.",
+    ],
+  },
+  {
+    id: 7,
+    nome: "Produção",
+    icon: Printer,
+    itens: [
+      "Verificar existência de falhas nos monitores de TDI linha 1 e APC.",
+      "Verificar funcionamento das datadoras e insumos da Zanasi linha 1 e APC.",
+    ],
+  },
+  {
+    id: 8,
+    nome: "Mezanino Carrossel",
+    icon: Boxes,
+    itens: [
+      "Funcionamento dos aparelhos de ar-condicionado e existência de lâmpadas queimadas nos painéis elétricos.",
+    ],
+  },
+  {
+    id: 9,
+    nome: "Área de Utilidades",
+    icon: Wind,
+    itens: [
+      "Verificar existência de lâmpadas queimadas nos painéis elétricos.",
+      "Verificar funcionamento dos compressores.",
+      "Verificar funcionamento dos secadores.",
+      "Verificar funcionamento das bombas de vácuo.",
+    ],
+  },
+  {
+    id: 10,
+    nome: "ITS (Inventory Tracking System)",
+    icon: ClipboardList,
+    itens: [
+      'Verificar as preventivas que estão "abertas" no sistema e programar execução antes do vencimento.',
+    ],
+  },
+];
+
+const ROTINAS = {
+  mecanica: {
+    label: "Mecânica",
+    areas: AREAS_MECANICA,
+    tema: TEMAS.mecanica,
+  },
+  eletrica: {
+    label: "Elétrica",
+    areas: AREAS_ELETRICA,
+    tema: TEMAS.eletrica,
+  },
+};
+
+function totalItensDe(areas) {
+  return areas.reduce((acc, a) => acc + a.itens.length, 0);
+}
+
+// ----------------------------------------------------------------------------
+// HELPERS
+// ----------------------------------------------------------------------------
+
+function formatarDataLonga(d) {
+  const dias = [
+    "domingo",
+    "segunda-feira",
+    "terça-feira",
+    "quarta-feira",
+    "quinta-feira",
+    "sexta-feira",
+    "sábado",
+  ];
+  const meses = [
+    "janeiro",
+    "fevereiro",
+    "março",
+    "abril",
+    "maio",
+    "junho",
+    "julho",
+    "agosto",
+    "setembro",
+    "outubro",
+    "novembro",
+    "dezembro",
+  ];
+  return `${dias[d.getDay()]}, ${d.getDate()} de ${meses[d.getMonth()]} de ${d.getFullYear()}`;
+}
+
+function formatarDataCurta(d) {
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function chaveDoDia(d, tipoRotina) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `rotina:${tipoRotina}:${yyyy}-${mm}-${dd}`;
+}
+
+function estadoInicial(areas) {
+  const initial = {};
+  areas.forEach((a) => {
+    initial[a.id] = {
+      checkedItems: new Array(a.itens.length).fill(false),
+      comentario: "",
+      savedAt: null,
+    };
+  });
+  return initial;
+}
+
+// Garante que todo status carregado do storage tenha exatamente as áreas e o formato
+// esperados pela rotina atual, mesmo que os dados salvos sejam de uma versão antiga
+// ou de uma rotina com áreas diferentes.
+function sanitizarStatus(raw, areas) {
+  const base = estadoInicial(areas);
+  if (!raw || typeof raw !== "object") return base;
+  areas.forEach((a) => {
+    const salvo = raw[a.id];
+    if (!salvo || typeof salvo !== "object") return;
+    const checkedItemsSalvos = Array.isArray(salvo.checkedItems) ? salvo.checkedItems : [];
+    const checkedItems = a.itens.map((_, idx) => !!checkedItemsSalvos[idx]);
+    base[a.id] = {
+      checkedItems,
+      comentario: typeof salvo.comentario === "string" ? salvo.comentario : "",
+      savedAt: typeof salvo.savedAt === "number" ? salvo.savedAt : null,
+    };
+  });
+  return base;
+}
+
+// ----------------------------------------------------------------------------
+// COMPONENTE: anel de progresso (SVG)
+// ----------------------------------------------------------------------------
+
+function ProgressRing({ progress, size = 44, stroke = 4, color = "#F5A623", track = "rgba(255,255,255,0.08)" }) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = c - progress * c;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
+      <circle cx={size / 2} cy={size / 2} r={r} stroke={track} strokeWidth={stroke} fill="none" />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        stroke={color}
+        strokeWidth={stroke}
+        fill="none"
+        strokeLinecap="round"
+        strokeDasharray={c}
+        strokeDashoffset={offset}
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        style={{ transition: "stroke-dashoffset 400ms cubic-bezier(0.4,0,0.2,1)" }}
+      />
+    </svg>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// COMPONENTE: card de área (grid principal)
+// ----------------------------------------------------------------------------
+
+function AreaCard({ area, status, onOpen, tema, fotoCount = 0 }) {
+  const Icon = area.icon;
+  const total = area.itens.length;
+  const safeStatus = status || { checkedItems: [], comentario: "", savedAt: null };
+  const checked = safeStatus.checkedItems.filter(Boolean).length;
+  const isDone = safeStatus.savedAt != null;
+  const hasComment = safeStatus.comentario && safeStatus.comentario.trim().length > 0;
+  const progress = total > 0 ? checked / total : 0;
+
+  return (
+    <button
+      onClick={() => onOpen(area.id)}
+      className="group relative flex flex-col gap-3 rounded-2xl p-4 text-left transition-all duration-200 active:scale-[0.97]"
+      style={{
+        background: isDone
+          ? "linear-gradient(160deg, rgba(61,220,132,0.10), rgba(28,33,40,0.9))"
+          : "rgba(28,33,40,0.9)",
+        border: isDone ? "1px solid rgba(61,220,132,0.35)" : "1px solid rgba(255,255,255,0.07)",
+      }}
+    >
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-2.5">
+          <div
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+            style={{
+              background: isDone ? "rgba(61,220,132,0.14)" : tema.accentSoft,
+              color: isDone ? "#3DDC84" : tema.accent,
+            }}
+          >
+            <Icon size={18} strokeWidth={2} />
+          </div>
+          <div>
+            <div
+              className="font-mono text-[11px] font-medium tracking-wider"
+              style={{ color: "rgba(255,255,255,0.38)" }}
+            >
+              ÁREA {area.id}
+            </div>
+          </div>
+        </div>
+        <ProgressRing
+          progress={progress}
+          size={36}
+          stroke={3}
+          color={isDone ? "#3DDC84" : tema.accent}
+        />
+      </div>
+
+      <h3 className="text-[15px] font-semibold leading-snug text-white">{area.nome}</h3>
+
+      <div className="mt-auto flex items-center justify-between pt-1">
+        <span className="text-[12px] font-medium" style={{ color: "rgba(255,255,255,0.45)" }}>
+          {checked}/{total} itens
+        </span>
+        <div className="flex items-center gap-1.5">
+          {fotoCount > 0 && (
+            <span
+              className="flex h-5 items-center gap-0.5 rounded-full px-1.5"
+              style={{ background: tema.accentRgbLow, color: tema.accent }}
+              title="Possui fotos"
+            >
+              <ImageIcon size={11} strokeWidth={2.3} />
+              <span className="text-[10px] font-semibold">{fotoCount}</span>
+            </span>
+          )}
+          {hasComment && (
+            <span
+              className="flex h-5 w-5 items-center justify-center rounded-full"
+              style={{ background: tema.accentRgbLow, color: tema.accent }}
+              title="Possui observações"
+            >
+              <MessageSquarePlus size={11} strokeWidth={2.3} />
+            </span>
+          )}
+          {isDone && (
+            <span
+              className="flex h-5 w-5 items-center justify-center rounded-full"
+              style={{ background: "rgba(61,220,132,0.18)", color: "#3DDC84" }}
+            >
+              <Check size={12} strokeWidth={3} />
+            </span>
+          )}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// COMPONENTE: modal de detalhe da área
+// ----------------------------------------------------------------------------
+
+function AreaModal({ area, status, onClose, onToggleItem, onChangeComentario, onSave, tema, fotos, onAddFotos, onRemoveFoto }) {
+  const [showComment, setShowComment] = useState(
+    status.comentario && status.comentario.trim().length > 0
+  );
+  const [justFinished, setJustFinished] = useState(false);
+  const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const minhasFotos = fotos || [];
+
+  const handleFilesSelected = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    onAddFotos(area.id, files);
+    e.target.value = "";
+  };
+
+  useEffect(() => {
+    if (showComment && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [showComment]);
+
+  if (!area) return null;
+  const Icon = area.icon;
+  const total = area.itens.length;
+  const checked = status.checkedItems.filter(Boolean).length;
+
+  const handleFinish = () => {
+    onSave(area.id);
+    setJustFinished(true);
+    setTimeout(() => {
+      setJustFinished(false);
+      onClose();
+    }, 500);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col"
+      style={{ background: "rgba(8,10,13,0.72)", backdropFilter: "blur(4px)" }}
+    >
+      <div
+        className="flex flex-col overflow-hidden rounded-3xl"
+        style={{
+          background: "#181B21",
+          border: "1px solid rgba(255,255,255,0.08)",
+          boxShadow: "0 -8px 40px rgba(0,0,0,0.45)",
+          margin: "auto 12px",
+          width: "calc(100% - 24px)",
+          maxWidth: "480px",
+          maxHeight: "calc(100% - 48px)",
+        }}
+      >
+        {/* Header */}
+        <div
+          className="flex shrink-0 items-start justify-between gap-3 px-5 pb-4 pt-5"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+              style={{ background: tema.accentSoft, color: tema.accent }}
+            >
+              <Icon size={20} strokeWidth={2} />
+            </div>
+            <div>
+              <div
+                className="font-mono text-[11px] font-medium tracking-wider"
+                style={{ color: "rgba(255,255,255,0.4)" }}
+              >
+                ÁREA {area.id}
+              </div>
+              <h2 className="text-[17px] font-semibold leading-tight text-white">{area.nome}</h2>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 transition-colors"
+            style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.75)" }}
+          >
+            <ChevronLeft size={16} />
+            <span className="text-[12.5px] font-medium">Voltar</span>
+          </button>
+        </div>
+
+        {/* Body scrollable */}
+        <div
+          className="px-5 py-4"
+          style={{
+            flex: "1 1 0%",
+            minHeight: 0,
+            overflowY: "auto",
+            WebkitOverflowScrolling: "touch",
+            overscrollBehavior: "contain",
+          }}
+        >
+          <div className="mb-4 flex items-center gap-2">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{
+                  width: `${total ? (checked / total) * 100 : 0}%`,
+                  background: tema.accent,
+                }}
+              />
+            </div>
+            <span className="shrink-0 text-[12px] font-medium" style={{ color: "rgba(255,255,255,0.5)" }}>
+              {checked}/{total}
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            {area.itens.map((item, idx) => {
+              const isChecked = !!status.checkedItems[idx];
+              return (
+                <button
+                  key={idx}
+                  onClick={() => onToggleItem(area.id, idx)}
+                  className="flex w-full items-start gap-3 rounded-xl p-3 text-left transition-colors"
+                  style={{
+                    background: isChecked ? "rgba(61,220,132,0.08)" : "rgba(255,255,255,0.03)",
+                    border: isChecked ? "1px solid rgba(61,220,132,0.25)" : "1px solid rgba(255,255,255,0.05)",
+                  }}
+                >
+                  <span
+                    className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md transition-colors"
+                    style={{
+                      background: isChecked ? "#3DDC84" : "transparent",
+                      border: isChecked ? "none" : "1.5px solid rgba(255,255,255,0.25)",
+                    }}
+                  >
+                    {isChecked && <Check size={13} strokeWidth={3} color="#0E1116" />}
+                  </span>
+                  <span
+                    className="text-[13.5px] leading-snug"
+                    style={{
+                      color: isChecked ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.88)",
+                      textDecoration: isChecked ? "line-through" : "none",
+                    }}
+                  >
+                    {item}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Comentários */}
+          <div className="mt-5">
+            {!showComment ? (
+              <button
+                onClick={() => setShowComment(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-[13px] font-medium transition-colors"
+                style={{
+                  background: tema.accentSoft2,
+                  color: tema.accent,
+                  border: `1px dashed ${tema.accentBorder}`,
+                }}
+              >
+                <MessageSquarePlus size={15} />
+                Adicionar observações desta área
+              </button>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <label className="text-[12px] font-medium" style={{ color: "rgba(255,255,255,0.5)" }}>
+                  Observações / comentários
+                </label>
+                <textarea
+                  ref={textareaRef}
+                  value={status.comentario || ""}
+                  onChange={(e) => onChangeComentario(area.id, e.target.value)}
+                  placeholder="Descreva o que foi observado nesta área (vazamentos, ruídos, peças a trocar, etc.)"
+                  rows={4}
+                  className="w-full resize-none rounded-xl p-3 text-[13.5px] leading-relaxed outline-none"
+                  style={{
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    color: "white",
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Fotos */}
+          <div className="mt-5">
+            <label className="mb-2 block text-[12px] font-medium" style={{ color: "rgba(255,255,255,0.5)" }}>
+              Fotos desta área {minhasFotos.length > 0 ? `(${minhasFotos.length})` : ""}
+            </label>
+
+            {minhasFotos.length > 0 && (
+              <div className="mb-3 grid grid-cols-3 gap-2">
+                {minhasFotos.map((foto) => (
+                  <div
+                    key={foto.id}
+                    className="group relative aspect-square overflow-hidden rounded-xl"
+                    style={{ border: "1px solid rgba(255,255,255,0.1)" }}
+                  >
+                    <img
+                      src={foto.dataUrl}
+                      alt={area.nome}
+                      className="h-full w-full object-cover"
+                    />
+                    <button
+                      onClick={() => onRemoveFoto(area.id, foto.id)}
+                      className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full"
+                      style={{ background: "rgba(8,10,13,0.75)", color: "#F0997B" }}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => cameraInputRef.current && cameraInputRef.current.click()}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-[13px] font-medium"
+                style={{
+                  background: tema.accentSoft2,
+                  color: tema.accent,
+                  border: `1px dashed ${tema.accentBorder}`,
+                }}
+              >
+                <Camera size={15} />
+                Tirar foto
+              </button>
+              <button
+                onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-[13px] font-medium"
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  color: "rgba(255,255,255,0.7)",
+                  border: "1px dashed rgba(255,255,255,0.18)",
+                }}
+              >
+                <ImageIcon size={15} />
+                Anexar
+              </button>
+            </div>
+
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              multiple
+              className="hidden"
+              onChange={handleFilesSelected}
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handleFilesSelected}
+            />
+          </div>
+          <div style={{ height: "8px" }} />
+        </div>
+
+        {/* Footer fixo */}
+        <div className="shrink-0 px-5 pb-5 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          <button
+            onClick={handleFinish}
+            disabled={justFinished}
+            className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-[14px] font-semibold transition-all active:scale-[0.98]"
+            style={{
+              background: justFinished ? "#3DDC84" : tema.accent,
+              color: "#14171C",
+            }}
+          >
+            {justFinished ? (
+              <>
+                <CheckCircle2 size={17} strokeWidth={2.4} />
+                Concluído
+              </>
+            ) : (
+              <>
+                <Check size={16} strokeWidth={2.4} />
+                Concluir área
+              </>
+            )}
+          </button>
+          <p className="mt-2 text-center text-[11px]" style={{ color: "rgba(255,255,255,0.3)" }}>
+            Itens e observações já estão salvos automaticamente
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// COMPONENTE: modal do relatório final
+// ----------------------------------------------------------------------------
+
+function ReportModal({ open, onClose, reportText, onSendWhatsapp, telefone, setTelefone }) {
+  const [copied, setCopied] = useState(false);
+
+  if (!open) return null;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(reportText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch (e) {
+      // silencioso — clipboard pode não estar disponível
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+      style={{ background: "rgba(8,10,13,0.75)", backdropFilter: "blur(4px)" }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-3xl sm:max-w-lg sm:rounded-3xl"
+        style={{
+          background: "#181B21",
+          border: "1px solid rgba(255,255,255,0.08)",
+          boxShadow: "0 -8px 40px rgba(0,0,0,0.5)",
+        }}
+      >
+        <div
+          className="flex items-center justify-between px-5 pb-4 pt-5"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-10 w-10 items-center justify-center rounded-xl"
+              style={{ background: "rgba(61,220,132,0.14)", color: "#3DDC84" }}
+            >
+              <FileText size={18} />
+            </div>
+            <h2 className="text-[16px] font-semibold text-white">Relatório da rotina</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-full"
+            style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)" }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          <pre
+            className="whitespace-pre-wrap rounded-xl p-4 text-[12.5px] leading-relaxed"
+            style={{
+              background: "rgba(0,0,0,0.25)",
+              border: "1px solid rgba(255,255,255,0.06)",
+              color: "rgba(255,255,255,0.85)",
+              fontFamily: "ui-monospace, 'JetBrains Mono', monospace",
+            }}
+          >
+            {reportText}
+          </pre>
+
+          <div className="mt-4">
+            <label className="mb-1.5 block text-[12px] font-medium" style={{ color: "rgba(255,255,255,0.5)" }}>
+              Número de WhatsApp (opcional — com DDD)
+            </label>
+            <input
+              type="tel"
+              value={telefone}
+              onChange={(e) => setTelefone(e.target.value)}
+              placeholder="Ex: 31999998888"
+              className="w-full rounded-xl p-3 text-[13.5px] outline-none"
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: "white",
+              }}
+            />
+            <p className="mt-1.5 text-[11px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+              Deixe vazio para escolher o contato direto no WhatsApp.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 px-5 pb-5 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          <button
+            onClick={onSendWhatsapp}
+            className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-[14px] font-semibold transition-all active:scale-[0.98]"
+            style={{ background: "#3DDC84", color: "#0E1116" }}
+          >
+            <Send size={16} strokeWidth={2.4} />
+            Enviar pelo WhatsApp
+          </button>
+          <button
+            onClick={handleCopy}
+            className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-[13.5px] font-medium transition-all active:scale-[0.98]"
+            style={{
+              background: "rgba(255,255,255,0.06)",
+              color: "rgba(255,255,255,0.85)",
+              border: "1px solid rgba(255,255,255,0.1)",
+            }}
+          >
+            {copied ? <CheckCircle2 size={15} /> : <Download size={15} />}
+            {copied ? "Texto copiado" : "Copiar texto do relatório"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// APP PRINCIPAL
+// ----------------------------------------------------------------------------
+
+function MaintenanceApp() {
+  const today = useMemo(() => new Date(), []);
+  const [tipoRotina, setTipoRotina] = useState("mecanica");
+  const rotinaAtual = ROTINAS[tipoRotina];
+  const AREAS = rotinaAtual.areas;
+  const tema = rotinaAtual.tema;
+  const TOTAL_ITENS = useMemo(() => totalItensDe(AREAS), [AREAS]);
+  const storageKey = useMemo(() => chaveDoDia(today, tipoRotina), [today, tipoRotina]);
+
+  const [status, setStatus] = useState(() => estadoInicial(AREAS));
+  const [openAreaId, setOpenAreaId] = useState(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [photoReportOpen, setPhotoReportOpen] = useState(false);
+  const [telefone, setTelefone] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
+  const [resetConfirm, setResetConfirm] = useState(false);
+  // Fotos ficam só na memória da sessão (não persistidas, para não estourar o
+  // limite de armazenamento do navegador e arriscar o progresso do checklist),
+  // organizadas por id de área. Resetam ao trocar de rotina/dia ou recarregar a página.
+  const [fotosPorArea, setFotosPorArea] = useState({});
+
+  // Limpa as fotos da sessão ao trocar de rotina (mecânica/elétrica têm fotos independentes)
+  useEffect(() => {
+    setFotosPorArea({});
+  }, [storageKey]);
+
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function addFotos(areaId, files) {
+    const novas = await Promise.all(
+      files.map(async (file) => ({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        dataUrl: await fileToDataUrl(file),
+      }))
+    );
+    setFotosPorArea((prev) => ({
+      ...prev,
+      [areaId]: [...(prev[areaId] || []), ...novas],
+    }));
+  }
+
+  function removeFoto(areaId, fotoId) {
+    setFotosPorArea((prev) => ({
+      ...prev,
+      [areaId]: (prev[areaId] || []).filter((f) => f.id !== fotoId),
+    }));
+  }
+
+  const totalFotos = useMemo(
+    () => Object.values(fotosPorArea).reduce((acc, arr) => acc + (arr ? arr.length : 0), 0),
+    [fotosPorArea]
+  );
+
+  // Toda vez que troca o tipo de rotina (ou no carregamento inicial), busca o progresso salvo dessa rotina/dia
+  const loadedKeyRef = useRef(null);
+  const [loadError, setLoadError] = useState(null);
+  useEffect(() => {
+    setLoaded(false);
+    setLoadError(null);
+    setOpenAreaId(null);
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        setStatus(sanitizarStatus(JSON.parse(raw), AREAS));
+      } else {
+        setStatus(estadoInicial(AREAS));
+      }
+    } catch (e) {
+      console.error("Falha ao carregar progresso salvo:", e);
+      setStatus(estadoInicial(AREAS));
+      setLoadError(String(e && e.message ? e.message : e));
+    } finally {
+      loadedKeyRef.current = storageKey;
+      setLoaded(true);
+    }
+  }, [storageKey]);
+
+  // Salva automaticamente a cada mudança de status (depois do carregamento inicial da MESMA chave)
+  const saveTimeoutRef = useRef(null);
+  useEffect(() => {
+    if (!loaded || loadedKeyRef.current !== storageKey) return;
+    setSaveState("saving");
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(status));
+        setSaveState("saved");
+      } catch (e) {
+        console.error("Falha ao salvar progresso:", e);
+        setSaveState("error");
+      }
+    }, 350);
+    return () => clearTimeout(saveTimeoutRef.current);
+  }, [status, loaded, storageKey]);
+
+  const isReady = loaded && loadedKeyRef.current === storageKey;
+
+  const totalChecked = useMemo(
+    () =>
+      Object.values(status).reduce(
+        (acc, s) => acc + (s && Array.isArray(s.checkedItems) ? s.checkedItems.filter(Boolean).length : 0),
+        0
+      ),
+    [status]
+  );
+  const areasComObservacao = useMemo(
+    () => Object.values(status).filter((s) => s && s.comentario && s.comentario.trim().length > 0).length,
+    [status]
+  );
+  const areasSalvas = useMemo(
+    () => Object.values(status).filter((s) => s && s.savedAt != null).length,
+    [status]
+  );
+
+  const overallProgress = TOTAL_ITENS ? totalChecked / TOTAL_ITENS : 0;
+
+  function toggleItem(areaId, itemIdx) {
+    setStatus((prev) => {
+      const areaStatus = prev[areaId] || { checkedItems: [], comentario: "", savedAt: null };
+      const newChecked = [...areaStatus.checkedItems];
+      newChecked[itemIdx] = !newChecked[itemIdx];
+      return { ...prev, [areaId]: { ...areaStatus, checkedItems: newChecked } };
+    });
+  }
+
+  function changeComentario(areaId, texto) {
+    setStatus((prev) => ({
+      ...prev,
+      [areaId]: { ...(prev[areaId] || { checkedItems: [], comentario: "", savedAt: null }), comentario: texto },
+    }));
+  }
+
+  function saveArea(areaId) {
+    setStatus((prev) => ({
+      ...prev,
+      [areaId]: { ...(prev[areaId] || { checkedItems: [], comentario: "", savedAt: null }), savedAt: Date.now() },
+    }));
+  }
+
+  function resetarRotina() {
+    setStatus(estadoInicial(AREAS));
+    setFotosPorArea({});
+  }
+
+  const openArea = AREAS.find((a) => a.id === openAreaId);
+
+  const reportText = useMemo(() => {
+    const linhas = [];
+    linhas.push(`RELATÓRIO DE ROTINA DE MANUTENÇÃO — ${rotinaAtual.label.toUpperCase()}`);
+    linhas.push(`Data: ${formatarDataLonga(today)}`);
+    linhas.push(`Progresso geral: ${totalChecked}/${TOTAL_ITENS} itens verificados`);
+    linhas.push("");
+
+    AREAS.forEach((area, idx) => {
+      const s = status[area.id] || { checkedItems: [], comentario: "" };
+      const checked = s.checkedItems.filter(Boolean).length;
+
+      if (idx > 0) linhas.push("");
+
+      linhas.push(`*${area.nome}*: "${checked}/${area.itens.length}"`);
+
+      if (s.comentario && s.comentario.trim().length > 0) {
+        linhas.push(`> ${s.comentario.trim()}`);
+      }
+    });
+
+    linhas.push("");
+    linhas.push(`Fim do relatório — gerado em ${formatarDataCurta(today)}`);
+    return linhas.join("\n");
+  }, [status, today, totalChecked, AREAS, rotinaAtual, TOTAL_ITENS]);
+
+  function abrirRelatorioFotos() {
+    const areasComFoto = AREAS.filter((a) => (fotosPorArea[a.id] || []).length > 0);
+    const win = window.open("", "_blank");
+    if (!win) return;
+
+    const blocos = areasComFoto
+      .map((area) => {
+        const s = status[area.id] || { comentario: "" };
+        const fotosHtml = (fotosPorArea[area.id] || [])
+          .map(
+            (f) => `<img src="${f.dataUrl}" alt="${area.nome}" />`
+          )
+          .join("");
+        const comentarioHtml = s.comentario && s.comentario.trim().length > 0
+          ? `<p class="obs">${s.comentario.trim().replace(/</g, "&lt;")}</p>`
+          : "";
+        return `
+          <section>
+            <h2>${area.nome}</h2>
+            ${comentarioHtml}
+            <div class="grid">${fotosHtml}</div>
+          </section>`;
+      })
+      .join("");
+
+    const html = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<title>Relatório de fotos — ${rotinaAtual.label}</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+    color: #14171C;
+    margin: 0;
+    padding: 32px;
+  }
+  header {
+    margin-bottom: 24px;
+    border-bottom: 2px solid #14171C;
+    padding-bottom: 12px;
+  }
+  header h1 { font-size: 20px; margin: 0 0 4px; }
+  header p { font-size: 13px; color: #555; margin: 2px 0; }
+  section {
+    margin-bottom: 28px;
+    page-break-inside: avoid;
+  }
+  section h2 {
+    font-size: 15px;
+    background: #14171C;
+    color: white;
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 6px;
+    margin: 0 0 8px;
+  }
+  .obs {
+    font-size: 13px;
+    color: #333;
+    background: #F4F4F4;
+    border-left: 3px solid #999;
+    padding: 8px 12px;
+    margin: 0 0 10px;
+    border-radius: 4px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .grid img {
+    width: 100%;
+    height: 260px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+  }
+  @media print {
+    body { padding: 12px; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Relatório de fotos — Rotina ${rotinaAtual.label}</h1>
+    <p>${formatarDataLonga(today)}</p>
+    <p>${totalFotos} foto(s) em ${areasComFoto.length} área(s)</p>
+  </header>
+  ${blocos || '<p>Nenhuma foto anexada ainda.</p>'}
+</body>
+</html>`;
+
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 400);
+  }
+
+  function handleSendWhatsapp() {
+    const encoded = encodeURIComponent(reportText);
+    const base = telefone.trim()
+      ? `https://wa.me/55${telefone.replace(/\D/g, "")}`
+      : `https://wa.me/`;
+    const url = `${base}?text=${encoded}`;
+    window.open(url, "_blank");
+  }
+
+  if (!isReady) {
+    return (
+      <div
+        className="flex min-h-full w-full items-center justify-center"
+        style={{ background: "#0E1116" }}
+      >
+        <div className="flex flex-col items-center gap-3">
+          <div
+            className="h-8 w-8 animate-spin rounded-full"
+            style={{
+              border: `3px solid ${tema.accentRgbLow}`,
+              borderTopColor: tema.accent,
+            }}
+          />
+          <span className="text-[13px]" style={{ color: "rgba(255,255,255,0.45)" }}>
+            Carregando rotina de hoje...
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="relative min-h-full w-full"
+      style={{
+        background: "#0E1116",
+        fontFamily: "'Inter', -apple-system, sans-serif",
+      }}
+    >
+      {/* Textura sutil de fundo */}
+      <div
+        className="pointer-events-none fixed inset-0 opacity-[0.4] transition-opacity duration-300"
+        style={{
+          backgroundImage: `radial-gradient(circle at 15% 0%, ${tema.accentSoft2}, transparent 40%), radial-gradient(circle at 85% 100%, rgba(61,220,132,0.06), transparent 40%)`,
+        }}
+      />
+
+      <div className="relative mx-auto flex max-w-md flex-col px-4 pb-28 pt-6">
+        {/* Seletor de rotina */}
+        <div
+          className="mb-4 flex rounded-2xl p-1"
+          style={{ background: "rgba(28,33,40,0.9)", border: "1px solid rgba(255,255,255,0.07)" }}
+        >
+          {Object.entries(ROTINAS).map(([key, r]) => {
+            const ativo = key === tipoRotina;
+            const Icon = key === "mecanica" ? Wrench : Zap;
+            return (
+              <button
+                key={key}
+                onClick={() => setTipoRotina(key)}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-[13px] font-semibold transition-all duration-200"
+                style={{
+                  background: ativo ? r.tema.gradient : "transparent",
+                  color: ativo ? "#14171C" : "rgba(255,255,255,0.5)",
+                }}
+              >
+                <Icon size={15} strokeWidth={2.3} />
+                {r.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Header */}
+        <div className="mb-5 flex items-center justify-between">
+          <div>
+            <div
+              className="font-mono text-[11px] font-medium uppercase tracking-wider transition-colors duration-300"
+              style={{ color: tema.accent }}
+            >
+              Rotina diária — {rotinaAtual.label}
+            </div>
+            <h1 className="text-[20px] font-bold leading-tight text-white">
+              Checklist de manutenção
+            </h1>
+            <p className="mt-0.5 text-[12.5px]" style={{ color: "rgba(255,255,255,0.4)" }}>
+              {formatarDataLonga(today)}
+            </p>
+            {loadError && (
+              <p className="mt-1 text-[11px] font-medium" style={{ color: "#F0997B" }}>
+                ⚠ Não foi possível carregar o progresso salvo ({loadError}). Começando do zero.
+              </p>
+            )}
+          </div>
+          <div className="flex flex-col items-end gap-1.5">
+            <span
+              className="flex items-center gap-1.5 text-[10.5px] font-medium"
+              style={{
+                color:
+                  saveState === "error"
+                    ? "#F0997B"
+                    : saveState === "saving"
+                    ? "rgba(255,255,255,0.35)"
+                    : saveState === "saved"
+                    ? "#3DDC84"
+                    : "rgba(255,255,255,0.3)",
+              }}
+            >
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{
+                  background:
+                    saveState === "error"
+                      ? "#E24B4A"
+                      : saveState === "saving"
+                      ? "rgba(255,255,255,0.35)"
+                      : saveState === "saved"
+                      ? "#3DDC84"
+                      : "rgba(255,255,255,0.25)",
+                }}
+              />
+              {saveState === "error"
+                ? "Falha ao salvar"
+                : saveState === "saving"
+                ? "Salvando..."
+                : saveState === "saved"
+                ? "Progresso salvo"
+                : "Pronto"}
+            </span>
+            <button
+              onClick={() => setResetConfirm(true)}
+              className="text-[10.5px] font-medium underline"
+              style={{ color: "rgba(255,255,255,0.3)" }}
+            >
+              Reiniciar rotina
+            </button>
+          </div>
+        </div>
+
+        {/* Painel de progresso geral */}
+        <div
+          className="mb-5 flex items-center gap-4 rounded-2xl p-4"
+          style={{
+            background: "rgba(28,33,40,0.9)",
+            border: "1px solid rgba(255,255,255,0.07)",
+          }}
+        >
+          <ProgressRing progress={overallProgress} size={56} stroke={5} color={tema.accent} />
+          <div className="flex-1">
+            <div className="text-[18px] font-bold text-white">
+              {totalChecked}/{TOTAL_ITENS}
+              <span className="ml-1.5 text-[12px] font-normal" style={{ color: "rgba(255,255,255,0.4)" }}>
+                itens verificados
+              </span>
+            </div>
+            <div className="mt-1 flex gap-3 text-[11.5px]" style={{ color: "rgba(255,255,255,0.45)" }}>
+              <span className="flex items-center gap-1">
+                <CheckCircle2 size={12} style={{ color: "#3DDC84" }} />
+                {areasSalvas} áreas concluídas
+              </span>
+              <span className="flex items-center gap-1">
+                <MessageSquarePlus size={12} style={{ color: tema.accent }} />
+                {areasComObservacao} c/ observações
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Grid de áreas */}
+        <div className="grid grid-cols-2 gap-3">
+          {AREAS.map((area) => (
+            <AreaCard
+              key={area.id}
+              area={area}
+              status={status[area.id]}
+              onOpen={setOpenAreaId}
+              tema={tema}
+              fotoCount={(fotosPorArea[area.id] || []).length}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Botões flutuantes de gerar relatório */}
+      <div className="fixed inset-x-0 bottom-0 z-40 mx-auto flex max-w-md justify-center gap-2 px-4 pb-5">
+        <button
+          onClick={() => setReportOpen(true)}
+          className="flex flex-1 items-center justify-center gap-2 rounded-2xl py-4 text-[14.5px] font-semibold shadow-2xl transition-all active:scale-[0.98] duration-300"
+          style={{
+            background: tema.gradient,
+            color: "#14171C",
+            boxShadow: `0 8px 30px ${tema.glow}`,
+          }}
+        >
+          <FileText size={17} strokeWidth={2.3} />
+          Relatório de texto
+        </button>
+        <button
+          onClick={abrirRelatorioFotos}
+          disabled={totalFotos === 0}
+          className="flex items-center justify-center gap-2 rounded-2xl px-4 py-4 text-[14.5px] font-semibold shadow-2xl transition-all active:scale-[0.98] duration-300"
+          style={{
+            background: totalFotos === 0 ? "rgba(255,255,255,0.06)" : "rgba(28,33,40,0.95)",
+            color: totalFotos === 0 ? "rgba(255,255,255,0.3)" : "white",
+            border: "1px solid rgba(255,255,255,0.12)",
+          }}
+        >
+          <ImageIcon size={17} strokeWidth={2.3} />
+          {totalFotos > 0 ? totalFotos : ""}
+        </button>
+      </div>
+
+      {/* Modais */}
+      {openArea && status[openArea.id] && (
+        <AreaModal
+          area={openArea}
+          status={status[openArea.id]}
+          onClose={() => setOpenAreaId(null)}
+          onToggleItem={toggleItem}
+          onChangeComentario={changeComentario}
+          onSave={saveArea}
+          tema={tema}
+          fotos={fotosPorArea[openArea.id]}
+          onAddFotos={addFotos}
+          onRemoveFoto={removeFoto}
+        />
+      )}
+
+      <ReportModal
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        reportText={reportText}
+        onSendWhatsapp={handleSendWhatsapp}
+        telefone={telefone}
+        setTelefone={setTelefone}
+      />
+
+      {resetConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-6"
+          style={{ background: "rgba(8,10,13,0.75)", backdropFilter: "blur(4px)" }}
+          onClick={() => setResetConfirm(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl p-5"
+            style={{ background: "#181B21", border: "1px solid rgba(255,255,255,0.08)" }}
+          >
+            <div className="mb-3 flex items-center gap-2.5">
+              <div
+                className="flex h-9 w-9 items-center justify-center rounded-xl"
+                style={{ background: "rgba(226,75,74,0.14)", color: "#E24B4A" }}
+              >
+                <AlertTriangle size={17} />
+              </div>
+              <h3 className="text-[15px] font-semibold text-white">
+                Reiniciar rotina {rotinaAtual.label.toLowerCase()} de hoje?
+              </h3>
+            </div>
+            <p className="mb-4 text-[13px] leading-relaxed" style={{ color: "rgba(255,255,255,0.55)" }}>
+              Todos os itens marcados e observações de hoje na rotina <strong>{rotinaAtual.label.toLowerCase()}</strong> serão apagados. A outra rotina não é afetada. Essa ação não pode ser desfeita.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setResetConfirm(false)}
+                className="flex-1 rounded-xl py-2.5 text-[13px] font-medium"
+                style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.8)" }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  resetarRotina();
+                  setResetConfirm(false);
+                }}
+                className="flex-1 rounded-xl py-2.5 text-[13px] font-semibold"
+                style={{ background: "#E24B4A", color: "white" }}
+              >
+                Reiniciar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+</script>
+<script type="text/babel" data-presets="react">
+ReactDOM.createRoot(document.getElementById("root")).render(<MaintenanceApp />);
+</script>
+
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>
