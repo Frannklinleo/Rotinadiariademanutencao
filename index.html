@@ -111,6 +111,63 @@ const Trash2 = makeIcon("Trash2");
 <script type="text/babel" data-presets="react">
 
 // ----------------------------------------------------------------------------
+// SUPABASE — cliente leve sem SDK (fetch direto para a REST API)
+// ----------------------------------------------------------------------------
+const SUPA_URL = "https://mtnnfwipqsheqvntvufb.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10bm5md2lwcXNoZXF2bnR2dWZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwMTU2OTQsImV4cCI6MjA5ODU5MTY5NH0.0RqNghkes1C02fTKEJZlEtrIcjnWAWT2zchjDYEHKuM";
+
+const supaHeaders = {
+  "Content-Type": "application/json",
+  "apikey": SUPA_KEY,
+  "Authorization": `Bearer ${SUPA_KEY}`,
+  "Prefer": "return=representation",
+};
+
+async function supaFetch(path, opts = {}) {
+  const res = await fetch(`${SUPA_URL}/rest/v1${path}`, {
+    ...opts,
+    headers: { ...supaHeaders, ...(opts.headers || {}) },
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Supabase error ${res.status}: ${err}`);
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+// Busca usuário por nome+sobrenome, retorna null se não existir
+async function supaGetUsuario(nome, sobrenome) {
+  const rows = await supaFetch(
+    `/usuarios?nome=eq.${encodeURIComponent(nome)}&sobrenome=eq.${encodeURIComponent(sobrenome)}&limit=1`
+  );
+  return rows && rows.length > 0 ? rows[0] : null;
+}
+
+// Cria usuário novo, retorna o registro criado
+async function supaCreateUsuario(nome, sobrenome, senha) {
+  const rows = await supaFetch("/usuarios", {
+    method: "POST",
+    body: JSON.stringify({ nome, sobrenome, senha }),
+  });
+  return rows && rows.length > 0 ? rows[0] : null;
+}
+
+// Upsert de um registro de área (por usuario_id + tipo_rotina + data + area_id)
+async function supaUpsertRegistro(registro) {
+  return supaFetch("/registros_diarios", {
+    method: "POST",
+    headers: { "Prefer": "resolution=merge-duplicates,return=representation" },
+    body: JSON.stringify(registro),
+  });
+}
+
+// Busca todos os registros de uma data específica (todos os usuários, todas as rotinas)
+async function supaGetRegistrosDia(dataISO) {
+  return supaFetch(`/registros_diarios?data=eq.${dataISO}&order=usuario_nome.asc,tipo_rotina.asc,area_id.asc`);
+}
+
+// ----------------------------------------------------------------------------
 // DADOS DA ROTINA
 // ----------------------------------------------------------------------------
 
@@ -697,27 +754,43 @@ function ProgressRing({ progress, size = 44, stroke = 4, color = "#F5A623", trac
 
 function LoginModal({ onLogin }) {
   const [step, setStep] = useState("login"); // "login" | "cadastro"
+  // Cadastro
   const [nome, setNome] = useState("");
   const [sobrenome, setSobrenome] = useState("");
+  // Login
+  const [nomeLogin, setNomeLogin] = useState(() => {
+    const salvo = JSON.parse(localStorage.getItem("usuario_rotina") || "null");
+    return salvo ? salvo.nome || "" : "";
+  });
+  const [sobrenomeLogin, setSobrenomeLogin] = useState(() => {
+    const salvo = JSON.parse(localStorage.getItem("usuario_rotina") || "null");
+    return salvo ? salvo.sobrenome || "" : "";
+  });
   const [senha, setSenha] = useState("");
   const [confirmarSenha, setConfirmarSenha] = useState("");
   const [salvarSenha, setSalvarSenha] = useState(true);
   const [erro, setErro] = useState("");
   const [animando, setAnimando] = useState(false);
+  const [carregando, setCarregando] = useState(false);
   const senhaRef = useRef(null);
   const confirmarRef = useRef(null);
 
   const senhaInputs = [0, 1, 2, 3];
 
-  function handleSenhaDigito(idx, val, refsCadastro) {
+  function confirmar(u) {
+    setAnimando(true);
+    setTimeout(() => onLogin(u), 350);
+  }
+
+  function handleSenhaDigito(idx, val) {
     if (!/^\d?$/.test(val)) return;
     const arr = senha.split("");
     arr[idx] = val;
     const nova = arr.join("").slice(0, 4);
     setSenha(nova);
     if (val && idx < 3) {
-      const next = (refsCadastro || senhaRef.current).querySelectorAll("input")[idx + 1];
-      if (next) next.focus();
+      const inputs = senhaRef.current.querySelectorAll("input");
+      if (inputs[idx + 1]) inputs[idx + 1].focus();
     }
   }
 
@@ -748,31 +821,64 @@ function LoginModal({ onLogin }) {
     }
   }
 
-  function entrar() {
+  async function entrar() {
     setErro("");
-    const salvo = JSON.parse(localStorage.getItem("usuario_rotina") || "null");
-    if (!salvo) { setErro("Nenhum usuário cadastrado. Clique em Cadastrar."); return; }
-    if (senha !== salvo.senha) { setErro("Senha incorreta."); setSenha(""); return; }
-    if (salvarSenha) localStorage.setItem("usuario_sessao", JSON.stringify({ nome: salvo.nome, sobrenome: salvo.sobrenome }));
-    confirmar(salvo.nome, salvo.sobrenome);
+    setCarregando(true);
+    try {
+      // Tenta buscar no Supabase primeiro
+      let usuarioDb = null;
+      try { usuarioDb = await supaGetUsuario(nomeLogin, sobrenomeLogin); } catch (_) {}
+
+      if (usuarioDb) {
+        if (senha !== usuarioDb.senha) { setErro("Senha incorreta."); setSenha(""); setCarregando(false); return; }
+        // Salva cache local para auto-login e offline
+        localStorage.setItem("usuario_rotina", JSON.stringify({ id: usuarioDb.id, nome: usuarioDb.nome, sobrenome: usuarioDb.sobrenome, senha }));
+        if (salvarSenha) localStorage.setItem("usuario_sessao", JSON.stringify({ id: usuarioDb.id, nome: usuarioDb.nome, sobrenome: usuarioDb.sobrenome }));
+        confirmar({ id: usuarioDb.id, nome: usuarioDb.nome, sobrenome: usuarioDb.sobrenome });
+      } else {
+        // Fallback offline
+        const salvo = JSON.parse(localStorage.getItem("usuario_rotina") || "null");
+        if (!salvo) { setErro("Usuário não encontrado. Verifique o nome ou faça o cadastro."); setCarregando(false); return; }
+        if (salvo.nome.toLowerCase() !== nomeLogin.toLowerCase() || salvo.sobrenome.toLowerCase() !== sobrenomeLogin.toLowerCase()) {
+          setErro("Usuário não encontrado."); setCarregando(false); return;
+        }
+        if (senha !== salvo.senha) { setErro("Senha incorreta."); setSenha(""); setCarregando(false); return; }
+        if (salvarSenha) localStorage.setItem("usuario_sessao", JSON.stringify(salvo));
+        confirmar(salvo);
+      }
+    } catch (e) {
+      setErro("Erro de conexão. Verifique sua internet.");
+    }
+    setCarregando(false);
   }
 
-  function cadastrar() {
+  async function cadastrar() {
     setErro("");
     if (!nome.trim() || !sobrenome.trim()) { setErro("Preencha nome e sobrenome."); return; }
     if (senha.length !== 4) { setErro("A senha deve ter 4 dígitos."); return; }
     if (senha !== confirmarSenha) { setErro("As senhas não coincidem."); return; }
-    localStorage.setItem("usuario_rotina", JSON.stringify({ nome: nome.trim(), sobrenome: sobrenome.trim(), senha }));
-    if (salvarSenha) localStorage.setItem("usuario_sessao", JSON.stringify({ nome: nome.trim(), sobrenome: sobrenome.trim() }));
-    confirmar(nome.trim(), sobrenome.trim());
-  }
+    setCarregando(true);
+    try {
+      // Verifica se usuário já existe
+      let existe = null;
+      try { existe = await supaGetUsuario(nome.trim(), sobrenome.trim()); } catch (_) {}
+      if (existe) { setErro("Já existe um usuário com este nome. Faça login."); setCarregando(false); return; }
 
-  function confirmar(n, s) {
-    setAnimando(true);
-    setTimeout(() => onLogin({ nome: n, sobrenome: s }), 350);
-  }
+      let novoUsuario = null;
+      try { novoUsuario = await supaCreateUsuario(nome.trim(), sobrenome.trim(), senha); } catch (_) {}
 
-  const usuarioSalvo = JSON.parse(localStorage.getItem("usuario_rotina") || "null");
+      const dadosUsuario = novoUsuario
+        ? { id: novoUsuario.id, nome: novoUsuario.nome, sobrenome: novoUsuario.sobrenome }
+        : { id: null, nome: nome.trim(), sobrenome: sobrenome.trim() };
+
+      localStorage.setItem("usuario_rotina", JSON.stringify({ ...dadosUsuario, senha }));
+      if (salvarSenha) localStorage.setItem("usuario_sessao", JSON.stringify(dadosUsuario));
+      confirmar(dadosUsuario);
+    } catch (e) {
+      setErro("Erro ao cadastrar. Verifique sua conexão.");
+    }
+    setCarregando(false);
+  }
 
   const inputStyle = {
     background: "rgba(255,255,255,0.06)",
@@ -839,10 +945,30 @@ function LoginModal({ onLogin }) {
           </div>
         )}
 
-        {step === "login" && usuarioSalvo && (
-          <div className="mb-4 rounded-xl px-3 py-2.5" style={{ background: "rgba(255,255,255,0.04)" }}>
-            <p className="text-[13px] font-medium text-white">{usuarioSalvo.nome} {usuarioSalvo.sobrenome}</p>
-            <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>Usuário salvo neste dispositivo</p>
+        {step === "login" && (
+          <div className="mb-3 flex gap-2">
+            <div className="flex-1">
+              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Nome</label>
+              <input
+                type="text"
+                value={nomeLogin}
+                onChange={(e) => setNomeLogin(e.target.value)}
+                placeholder="Leonardo"
+                className="w-full rounded-xl px-3 py-2.5 text-[14px]"
+                style={inputStyle}
+              />
+            </div>
+            <div className="flex-1">
+              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Sobrenome</label>
+              <input
+                type="text"
+                value={sobrenomeLogin}
+                onChange={(e) => setSobrenomeLogin(e.target.value)}
+                placeholder="Franklin"
+                className="w-full rounded-xl px-3 py-2.5 text-[14px]"
+                style={inputStyle}
+              />
+            </div>
           </div>
         )}
 
@@ -925,10 +1051,15 @@ function LoginModal({ onLogin }) {
 
         <button
           onClick={step === "login" ? entrar : cadastrar}
+          disabled={carregando}
           className="mb-3 w-full rounded-2xl py-3.5 text-[14.5px] font-semibold transition-all active:scale-[0.98]"
-          style={{ background: "linear-gradient(135deg, #F5A623, #E8940F)", color: "#0E1116" }}
+          style={{
+            background: carregando ? "rgba(245,166,35,0.5)" : "linear-gradient(135deg, #F5A623, #E8940F)",
+            color: "#0E1116",
+            opacity: carregando ? 0.8 : 1,
+          }}
         >
-          {step === "login" ? "Entrar" : "Criar acesso e entrar"}
+          {carregando ? "Aguarde..." : step === "login" ? "Entrar" : "Criar acesso e entrar"}
         </button>
 
         <button
@@ -1594,53 +1725,101 @@ function MaintenanceApp() {
   const [reportOpen, setReportOpen] = useState(false);
   const [photoReportOpen, setPhotoReportOpen] = useState(false);
   const [reportOntemOpen, setReportOntemOpen] = useState(false);
+  const [reportTextOntem, setReportTextOntem] = useState(null);
+  const [carregandoOntem, setCarregandoOntem] = useState(false);
 
-  // Gera o texto do relatório do dia anterior para a rotina ativa atual
-  const reportTextOntem = useMemo(() => {
+  // Busca registros de ontem do Supabase (todos os usuários) quando o app carrega
+  useEffect(() => {
     const ontem = new Date(today);
     ontem.setDate(ontem.getDate() - 1);
     const yyyy = ontem.getFullYear();
     const mm = String(ontem.getMonth() + 1).padStart(2, "0");
     const dd = String(ontem.getDate()).padStart(2, "0");
-    const chave = `rotina:${tipoRotina}:${yyyy}-${mm}-${dd}`;
-    let dadosOntem = null;
-    try {
-      const raw = localStorage.getItem(chave);
-      if (raw) dadosOntem = JSON.parse(raw);
-    } catch (_) {}
+    const dataISO = `${yyyy}-${mm}-${dd}`;
 
-    if (!dadosOntem) return null; // sem dados = não havia rotina ontem
+    async function buscarOntem() {
+      setCarregandoOntem(true);
+      try {
+        const registros = await supaGetRegistrosDia(dataISO);
+        if (!registros || registros.length === 0) { setReportTextOntem(null); setCarregandoOntem(false); return; }
 
-    const areas = AREAS;
-    const totalOntem = totalItensDe(areas);
-    const concluidosOntem = areas.reduce((acc, a) => {
-      const s = dadosOntem[a.id];
-      if (!s) return acc;
-      return acc + a.itens.filter((item, idx) => itemEstaCompleto(item, idx, s)).length;
-    }, 0);
+        // Agrupa por usuário → rotina → áreas
+        const porUsuario = {};
+        registros.forEach((r) => {
+          const chave = r.usuario_nome;
+          if (!porUsuario[chave]) porUsuario[chave] = {};
+          if (!porUsuario[chave][r.tipo_rotina]) porUsuario[chave][r.tipo_rotina] = [];
+          porUsuario[chave][r.tipo_rotina].push(r);
+        });
 
-    const linhas = [];
-    linhas.push(`RELATÓRIO DE ROTINA DE MANUTENÇÃO — ${rotinaAtual.label.toUpperCase()}`);
-    linhas.push(`Data: ${formatarDataLonga(ontem)}`);
-    linhas.push(`Progresso geral: ${concluidosOntem}/${totalOntem} itens verificados`);
-    linhas.push("");
+        const linhas = [];
+        linhas.push(`RESUMO DO DIA ANTERIOR — ${formatarDataLonga(ontem).toUpperCase()}`);
+        linhas.push("");
 
-    areas.forEach((area, idx) => {
-      const s = dadosOntem[area.id] || { checkedItems: [], valores: {}, comentario: "" };
-      const checked = area.itens.filter((item, i) => itemEstaCompleto(item, i, s)).length;
-      if (idx > 0) linhas.push("");
-      linhas.push(`*${area.nome}*: "${checked}/${area.itens.length}"`);
-      const valoresFormatados = formatarValoresArea(area, s);
-      valoresFormatados.forEach((l) => linhas.push(`> ${l}`));
-      if (s.comentario && s.comentario.trim().length > 0) {
-        linhas.push(`> ${s.comentario.trim()}`);
+        Object.entries(porUsuario).forEach(([nomeUsuario, rotinas], uIdx) => {
+          if (uIdx > 0) linhas.push("");
+          linhas.push(`👤 *${nomeUsuario}*`);
+
+          Object.entries(rotinas).forEach(([rotina, areas]) => {
+            const labelRotina = rotina === "mecanica" ? "Mecânica" : rotina === "eletrica" ? "Elétrica" : "Start up";
+            const totalItens = areas.reduce((acc, r) => acc + (r.checked_items ? r.checked_items.length : 0), 0);
+            const checkedItens = areas.reduce((acc, r) => acc + (r.checked_items ? r.checked_items.filter(Boolean).length : 0), 0);
+
+            linhas.push(`  *${labelRotina}*: "${checkedItens}/${totalItens}"`);
+
+            areas.forEach((r) => {
+              // Valores estruturados (queimadores, bombas, etc.)
+              const valores = r.valores || {};
+              const valoresFmt = Object.entries(valores)
+                .filter(([, v]) => v && v.toString().trim())
+                .map(([k, v]) => `${k}: ${v}`)
+                .join(", ");
+              if (valoresFmt) linhas.push(`  > ${r.area_nome}: ${valoresFmt}`);
+              if (r.comentario && r.comentario.trim()) linhas.push(`  > ${r.area_nome}: ${r.comentario.trim()}`);
+            });
+          });
+        });
+
+        linhas.push("");
+        linhas.push(`Gerado em ${formatarDataCurta(today)}`);
+        setReportTextOntem(linhas.join("\n"));
+      } catch (_) {
+        // Fallback: tenta o localStorage local (apenas do usuário atual)
+        const ontemObj = new Date(today);
+        ontemObj.setDate(ontemObj.getDate() - 1);
+        const yyyy2 = ontemObj.getFullYear();
+        const mm2 = String(ontemObj.getMonth() + 1).padStart(2, "0");
+        const dd2 = String(ontemObj.getDate()).padStart(2, "0");
+        const resumo = {};
+        ["mecanica", "eletrica"].forEach((tipo) => {
+          try {
+            const raw = localStorage.getItem(`rotina:${tipo}:${yyyy2}-${mm2}-${dd2}`);
+            if (raw) {
+              const dados = JSON.parse(raw);
+              const areas = tipo === "mecanica" ? AREAS_MECANICA : AREAS_ELETRICA;
+              const total = totalItensDe(areas);
+              const concluidos = areas.reduce((acc, a) => {
+                const s = dados[a.id];
+                return acc + (s ? a.itens.filter((item, idx) => itemEstaCompleto(item, idx, s)).length : 0);
+              }, 0);
+              resumo[tipo] = { concluidos, total };
+            }
+          } catch (_2) {}
+        });
+        if (Object.keys(resumo).length > 0) {
+          const ls = [`RESUMO DE ONTEM (offline) — ${formatarDataLonga(ontem).toUpperCase()}`, ""];
+          if (resumo.mecanica) ls.push(`*Mecânica*: "${resumo.mecanica.concluidos}/${resumo.mecanica.total}"`);
+          if (resumo.eletrica) ls.push(`*Elétrica*: "${resumo.eletrica.concluidos}/${resumo.eletrica.total}"`);
+          setReportTextOntem(ls.join("\n"));
+        } else {
+          setReportTextOntem(null);
+        }
       }
-    });
+      setCarregandoOntem(false);
+    }
 
-    linhas.push("");
-    linhas.push(`Fim do relatório — gerado em ${formatarDataCurta(today)}`);
-    return linhas.join("\n");
-  }, [today, tipoRotina, AREAS, rotinaAtual]);
+    buscarOntem();
+  }, [today]);
   const [telefone, setTelefone] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
@@ -1780,10 +1959,32 @@ function MaintenanceApp() {
   }
 
   function saveArea(areaId) {
-    setStatus((prev) => ({
-      ...prev,
-      [areaId]: { ...(prev[areaId] || { checkedItems: [], valores: {}, comentario: "", savedAt: null }), savedAt: Date.now() },
-    }));
+    setStatus((prev) => {
+      const novo = {
+        ...prev,
+        [areaId]: { ...(prev[areaId] || { checkedItems: [], valores: {}, comentario: "", savedAt: null }), savedAt: Date.now() },
+      };
+      // Sincroniza com Supabase em background (sem bloquear a UI)
+      if (usuario && usuario.id) {
+        const s = novo[areaId];
+        const area = AREAS.find((a) => a.id === areaId);
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, "0");
+        const dd = String(today.getDate()).padStart(2, "0");
+        supaUpsertRegistro({
+          usuario_id: usuario.id,
+          usuario_nome: `${usuario.nome} ${usuario.sobrenome}`,
+          tipo_rotina: tipoRotina,
+          data: `${yyyy}-${mm}-${dd}`,
+          area_id: areaId,
+          area_nome: area ? area.nome : String(areaId),
+          checked_items: s.checkedItems || [],
+          valores: s.valores || {},
+          comentario: s.comentario || "",
+        }).catch(() => {}); // falha silenciosa — dados já estão no localStorage
+      }
+      return novo;
+    });
   }
 
   function resetarRotina() {
@@ -2185,19 +2386,20 @@ function MaintenanceApp() {
       {/* Botões flutuantes de gerar relatório */}
       <div className="fixed inset-x-0 bottom-0 z-40 mx-auto flex max-w-md flex-col gap-2 px-4 pb-5">
 
-        {/* Botão "Ontem" — só aparece se houver dados do dia anterior */}
-        {reportTextOntem && (
+        {/* Botão "Ontem" — aparece sempre (carregando ou com dados) */}
+        {(carregandoOntem || reportTextOntem) && (
           <button
-            onClick={() => setReportOntemOpen(true)}
+            onClick={() => !carregandoOntem && setReportOntemOpen(true)}
+            disabled={carregandoOntem}
             className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-[13px] font-medium shadow-lg transition-all active:scale-[0.98]"
             style={{
               background: "rgba(28,33,40,0.97)",
-              color: "rgba(255,255,255,0.55)",
+              color: carregandoOntem ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.55)",
               border: "1px solid rgba(255,255,255,0.1)",
             }}
           >
             <Circle size={13} strokeWidth={2} />
-            Ver relatório de ontem
+            {carregandoOntem ? "Buscando relatório de ontem..." : "Ver relatório de ontem (todos os usuários)"}
           </button>
         )}
 
