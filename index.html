@@ -162,9 +162,53 @@ async function supaUpsertRegistro(registro) {
   });
 }
 
-// Busca todos os registros de uma data específica (todos os usuários, todas as rotinas)
 async function supaGetRegistrosDia(dataISO) {
   return supaFetch(`/registros_diarios?data=eq.${dataISO}&order=usuario_nome.asc,tipo_rotina.asc,area_id.asc`);
+}
+
+// Busca histórico dos últimos N dias (todos os usuários)
+async function supaGetHistorico(diasAtras = 30) {
+  const ate = new Date();
+  const de = new Date();
+  de.setDate(de.getDate() - diasAtras);
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  return supaFetch(`/registros_diarios?data=gte.${fmt(de)}&data=lte.${fmt(ate)}&order=data.desc,usuario_nome.asc`);
+}
+
+// Lista todos os usuários
+async function supaGetTodosUsuarios() {
+  return supaFetch(`/usuarios?select=id,nome,sobrenome,foto_url,criado_em,role&order=nome.asc`);
+}
+
+// Atualiza foto_url do usuário
+async function supaAtualizarFotoUrl(userId, fotoUrl) {
+  return supaFetch(`/usuarios?id=eq.${userId}`, {
+    method: "PATCH",
+    headers: { "Prefer": "return=representation" },
+    body: JSON.stringify({ foto_url: fotoUrl }),
+  });
+}
+
+// Atualiza senha do usuário
+async function supaAtualizarSenha(userId, novaSenha) {
+  return supaFetch(`/usuarios?id=eq.${userId}`, {
+    method: "PATCH",
+    headers: { "Prefer": "return=representation" },
+    body: JSON.stringify({ senha: novaSenha }),
+  });
+}
+
+// Upload de avatar para o Supabase Storage
+async function supaUploadAvatar(userId, file) {
+  const ext = file.name.split(".").pop() || "jpg";
+  const path = `${userId}.${ext}`;
+  const res = await fetch(`${SUPA_URL}/storage/v1/object/avatars/${path}`, {
+    method: "POST",
+    headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}`, "Content-Type": file.type, "x-upsert": "true" },
+    body: file,
+  });
+  if (!res.ok) throw new Error("Falha no upload da foto");
+  return `${SUPA_URL}/storage/v1/object/public/avatars/${path}?t=${Date.now()}`;
 }
 
 // ----------------------------------------------------------------------------
@@ -747,6 +791,591 @@ function ProgressRing({ progress, size = 44, stroke = 4, color = "#F5A623", trac
 // ----------------------------------------------------------------------------
 // COMPONENTE: card de área (grid principal)
 // ----------------------------------------------------------------------------
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// MENU LATERAL
+// ----------------------------------------------------------------------------
+
+function MenuLateral({ aberto, onFechar, paginaAtual, onNavegar, usuario, tema }) {
+  const itens = [
+    { id: "checklist", icon: ClipboardList, label: "Checklist" },
+    { id: "perfil",    icon: Settings2,     label: "Meu perfil" },
+    { id: "dashboard", icon: ScanLine,      label: "Dashboard" },
+  ];
+
+  return (
+    <>
+      {/* Overlay */}
+      {aberto && (
+        <div
+          className="fixed inset-0 z-40"
+          style={{ background: "rgba(8,10,13,0.7)", backdropFilter: "blur(4px)" }}
+          onClick={onFechar}
+        />
+      )}
+
+      {/* Drawer */}
+      <div
+        className="fixed left-0 top-0 z-50 flex h-full w-72 flex-col"
+        style={{
+          background: "rgba(16,19,24,0.99)",
+          borderRight: "1px solid rgba(255,255,255,0.07)",
+          transform: aberto ? "translateX(0)" : "translateX(-100%)",
+          transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)",
+          boxShadow: aberto ? "8px 0 40px rgba(0,0,0,0.5)" : "none",
+        }}
+      >
+        {/* Cabeçalho do menu */}
+        <div className="flex items-center gap-3 px-5 pb-4 pt-12">
+          <div
+            className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl"
+            style={{ background: tema.accentSoft, border: `1px solid ${tema.accentBorder}` }}
+          >
+            {usuario?.foto_url
+              ? <img src={usuario.foto_url} alt="" className="h-full w-full object-cover" />
+              : <span className="text-[17px] font-bold" style={{ color: tema.accent }}>
+                  {usuario ? usuario.nome[0].toUpperCase() : "?"}
+                </span>
+            }
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-[14px] font-semibold text-white">
+              {usuario ? `${usuario.nome} ${usuario.sobrenome}` : "Usuário"}
+            </p>
+            <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>Manutenção</p>
+          </div>
+        </div>
+
+        <div className="mx-4 mb-4 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
+
+        {/* Itens de navegação */}
+        <nav className="flex flex-1 flex-col gap-1 px-3">
+          {itens.map(({ id, icon: Icon, label }) => {
+            const ativo = paginaAtual === id;
+            return (
+              <button
+                key={id}
+                onClick={() => { onNavegar(id); onFechar(); }}
+                className="flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-all"
+                style={{
+                  background: ativo ? tema.accentSoft : "transparent",
+                  color: ativo ? tema.accent : "rgba(255,255,255,0.6)",
+                  fontWeight: ativo ? "600" : "400",
+                }}
+              >
+                <Icon size={18} strokeWidth={ativo ? 2.3 : 2} />
+                <span className="text-[14px]">{label}</span>
+                {ativo && (
+                  <span
+                    className="ml-auto h-1.5 w-1.5 rounded-full"
+                    style={{ background: tema.accent }}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="mx-4 mb-4 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
+
+        {/* Versão */}
+        <p className="px-5 pb-8 text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>
+          Rotina de Manutenção v2.0
+        </p>
+      </div>
+    </>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// TELA DE PERFIL
+// ----------------------------------------------------------------------------
+
+function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
+  const [fotoCarregando, setFotoCarregando] = useState(false);
+  const [alterandoSenha, setAlterandoSenha] = useState(false);
+  const [senhaAtual, setSenhaAtual] = useState("");
+  const [novaSenha, setNovaSenha] = useState("");
+  const [confirmarNovaSenha, setConfirmarNovaSenha] = useState("");
+  const [msgSenha, setMsgSenha] = useState(null); // { tipo: "ok"|"erro", texto }
+  const [metricas, setMetricas] = useState(null);
+  const fileRef = useRef(null);
+
+  // Busca métricas pessoais do usuário
+  useEffect(() => {
+    if (!usuario?.id) return;
+    async function carregar() {
+      try {
+        const dados = await supaGetHistorico(30);
+        if (!dados) return;
+        const meus = dados.filter((r) => r.usuario_id === usuario.id);
+        const diasSet = new Set(meus.map((r) => r.data));
+        const totalCheck = meus.reduce((a, r) => a + (r.checked_items ? r.checked_items.filter(Boolean).length : 0), 0);
+        const totalItens = meus.reduce((a, r) => a + (r.checked_items ? r.checked_items.length : 0), 0);
+        setMetricas({
+          diasAtivos: diasSet.size,
+          totalCheck,
+          totalItens,
+          percentual: totalItens ? Math.round((totalCheck / totalItens) * 100) : 0,
+        });
+      } catch (_) {}
+    }
+    carregar();
+  }, [usuario]);
+
+  async function handleFoto(e) {
+    const file = e.target.files?.[0];
+    if (!file || !usuario?.id) return;
+    setFotoCarregando(true);
+    try {
+      const url = await supaUploadAvatar(usuario.id, file);
+      await supaAtualizarFotoUrl(usuario.id, url);
+      const atualizado = { ...usuario, foto_url: url };
+      localStorage.setItem("usuario_sessao", JSON.stringify(atualizado));
+      onAtualizarUsuario(atualizado);
+    } catch (_) {
+      alert("Erro ao enviar foto. Tente novamente.");
+    }
+    setFotoCarregando(false);
+    e.target.value = "";
+  }
+
+  async function handleAlterarSenha() {
+    setMsgSenha(null);
+    const salvo = JSON.parse(localStorage.getItem("usuario_rotina") || "null");
+    if (!salvo || senhaAtual !== salvo.senha) {
+      setMsgSenha({ tipo: "erro", texto: "Senha atual incorreta." }); return;
+    }
+    if (novaSenha.length !== 4 || !/^\d{4}$/.test(novaSenha)) {
+      setMsgSenha({ tipo: "erro", texto: "Nova senha deve ter 4 dígitos." }); return;
+    }
+    if (novaSenha !== confirmarNovaSenha) {
+      setMsgSenha({ tipo: "erro", texto: "As senhas não coincidem." }); return;
+    }
+    try {
+      await supaAtualizarSenha(usuario.id, novaSenha);
+      localStorage.setItem("usuario_rotina", JSON.stringify({ ...salvo, senha: novaSenha }));
+      setMsgSenha({ tipo: "ok", texto: "Senha alterada com sucesso!" });
+      setSenhaAtual(""); setNovaSenha(""); setConfirmarNovaSenha("");
+      setAlterandoSenha(false);
+    } catch (_) {
+      setMsgSenha({ tipo: "erro", texto: "Erro ao alterar senha. Tente novamente." });
+    }
+  }
+
+  const inputStyle = {
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    color: "white", outline: "none", borderRadius: "12px",
+    padding: "10px 14px", fontSize: "14px", width: "100%",
+  };
+
+  return (
+    <div className="flex flex-col gap-4 pb-8">
+      {/* Avatar */}
+      <div
+        className="flex flex-col items-center gap-3 rounded-3xl p-6"
+        style={{ background: "rgba(28,33,40,0.9)", border: "1px solid rgba(255,255,255,0.07)" }}
+      >
+        <div className="relative">
+          <div
+            className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl"
+            style={{ background: tema.accentSoft, border: `2px solid ${tema.accentBorder}` }}
+          >
+            {fotoCarregando
+              ? <div className="text-[11px]" style={{ color: tema.accent }}>...</div>
+              : usuario?.foto_url
+                ? <img src={usuario.foto_url} alt="" className="h-full w-full object-cover" />
+                : <span className="text-[28px] font-bold" style={{ color: tema.accent }}>
+                    {usuario?.nome?.[0]?.toUpperCase() || "?"}
+                  </span>
+            }
+          </div>
+          <button
+            onClick={() => fileRef.current?.click()}
+            className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full"
+            style={{ background: tema.gradient, color: "#0E1116" }}
+          >
+            <Camera size={13} strokeWidth={2.5} />
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFoto} />
+        </div>
+        <div className="text-center">
+          <h2 className="text-[18px] font-bold text-white">{usuario?.nome} {usuario?.sobrenome}</h2>
+          <p className="text-[12px]" style={{ color: "rgba(255,255,255,0.4)" }}>Equipe de Manutenção</p>
+        </div>
+      </div>
+
+      {/* Métricas pessoais */}
+      {metricas && (
+        <div
+          className="rounded-3xl p-5"
+          style={{ background: "rgba(28,33,40,0.9)", border: "1px solid rgba(255,255,255,0.07)" }}
+        >
+          <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+            Últimos 30 dias
+          </h3>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Dias ativos", valor: metricas.diasAtivos },
+              { label: "Itens feitos", valor: metricas.totalCheck },
+              { label: "Taxa geral", valor: `${metricas.percentual}%` },
+            ].map(({ label, valor }) => (
+              <div
+                key={label}
+                className="flex flex-col items-center gap-1 rounded-2xl py-3"
+                style={{ background: "rgba(255,255,255,0.04)" }}
+              >
+                <span className="text-[22px] font-bold" style={{ color: tema.accent }}>{valor}</span>
+                <span className="text-center text-[10px] leading-tight" style={{ color: "rgba(255,255,255,0.4)" }}>{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Alterar senha */}
+      <div
+        className="rounded-3xl p-5"
+        style={{ background: "rgba(28,33,40,0.9)", border: "1px solid rgba(255,255,255,0.07)" }}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+            Segurança
+          </h3>
+          <button
+            onClick={() => setAlterandoSenha(!alterandoSenha)}
+            className="rounded-xl px-3 py-1.5 text-[12px] font-medium"
+            style={{ background: tema.accentSoft, color: tema.accent }}
+          >
+            {alterandoSenha ? "Cancelar" : "Alterar PIN"}
+          </button>
+        </div>
+
+        {alterandoSenha && (
+          <div className="flex flex-col gap-3">
+            {[
+              { label: "PIN atual", val: senhaAtual, set: setSenhaAtual },
+              { label: "Novo PIN (4 dígitos)", val: novaSenha, set: setNovaSenha },
+              { label: "Confirmar novo PIN", val: confirmarNovaSenha, set: setConfirmarNovaSenha },
+            ].map(({ label, val, set }) => (
+              <div key={label}>
+                <label className="mb-1 block text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>{label}</label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={val}
+                  onChange={(e) => set(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                  style={inputStyle}
+                  placeholder="••••"
+                />
+              </div>
+            ))}
+
+            {msgSenha && (
+              <p className="text-[12px]" style={{ color: msgSenha.tipo === "ok" ? "#3DDC84" : "#F0997B" }}>
+                {msgSenha.texto}
+              </p>
+            )}
+
+            <button
+              onClick={handleAlterarSenha}
+              className="w-full rounded-2xl py-3 text-[14px] font-semibold"
+              style={{ background: tema.gradient, color: "#0E1116" }}
+            >
+              Salvar novo PIN
+            </button>
+          </div>
+        )}
+
+        {!alterandoSenha && (
+          <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.5)" }}>
+            PIN de 4 dígitos configurado ✓
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// TELA DASHBOARD
+// ----------------------------------------------------------------------------
+
+function TelaDashboard({ tema, today }) {
+  const [dados, setDados] = useState(null);
+  const [carregando, setCarregando] = useState(true);
+  const [periodo, setPeriodo] = useState(7); // 7 ou 30 dias
+
+  useEffect(() => {
+    async function carregar() {
+      setCarregando(true);
+      try {
+        const registros = await supaGetHistorico(periodo);
+        const usuarios = await supaGetTodosUsuarios();
+        setDados({ registros: registros || [], usuarios: usuarios || [] });
+      } catch (_) {
+        setDados({ registros: [], usuarios: [] });
+      }
+      setCarregando(false);
+    }
+    carregar();
+  }, [periodo]);
+
+  if (carregando) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-16">
+        <div className="text-[13px]" style={{ color: "rgba(255,255,255,0.4)" }}>Carregando dados...</div>
+      </div>
+    );
+  }
+
+  const { registros, usuarios } = dados;
+
+  // ── Métricas gerais ──────────────────────────────────────────────────────
+  const totalChecked = registros.reduce((a, r) => a + (r.checked_items ? r.checked_items.filter(Boolean).length : 0), 0);
+  const totalItens   = registros.reduce((a, r) => a + (r.checked_items ? r.checked_items.length : 0), 0);
+  const taxaGeral    = totalItens ? Math.round((totalChecked / totalItens) * 100) : 0;
+  const diasComDados = new Set(registros.map((r) => r.data)).size;
+
+  // ── Progresso por usuário (hoje) ─────────────────────────────────────────
+  const hoje = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+  const registrosHoje = registros.filter((r) => r.data === hoje);
+  const porUsuarioHoje = {};
+  registrosHoje.forEach((r) => {
+    if (!porUsuarioHoje[r.usuario_nome]) porUsuarioHoje[r.usuario_nome] = { checked: 0, total: 0, rotinas: new Set() };
+    porUsuarioHoje[r.usuario_nome].checked += r.checked_items ? r.checked_items.filter(Boolean).length : 0;
+    porUsuarioHoje[r.usuario_nome].total   += r.checked_items ? r.checked_items.length : 0;
+    porUsuarioHoje[r.usuario_nome].rotinas.add(r.tipo_rotina);
+  });
+
+  // ── Progresso diário (últimos N dias) ────────────────────────────────────
+  const porDia = {};
+  registros.forEach((r) => {
+    if (!porDia[r.data]) porDia[r.data] = { checked: 0, total: 0 };
+    porDia[r.data].checked += r.checked_items ? r.checked_items.filter(Boolean).length : 0;
+    porDia[r.data].total   += r.checked_items ? r.checked_items.length : 0;
+  });
+  const diasOrdenados = Object.keys(porDia).sort().slice(-periodo);
+  const maxBarDia = Math.max(...diasOrdenados.map((d) => porDia[d].total), 1);
+
+  // ── Indicadores de equipamentos ──────────────────────────────────────────
+  const valoresEq = {};
+  registros.forEach((r) => {
+    const v = r.valores || {};
+    Object.entries(v).forEach(([k, val]) => {
+      if (!valoresEq[k]) valoresEq[k] = [];
+      if (val && val.toString().trim()) valoresEq[k].push({ data: r.data, val: parseFloat(val) || val });
+    });
+  });
+
+  // Queimadores: temperatura média
+  const queimadoresTemp = [1,2,3].map((n) => {
+    const chave = `queimador${n}_temp`;
+    const leituras = (valoresEq[chave] || []).filter((x) => !isNaN(x.val));
+    const media = leituras.length ? Math.round(leituras.reduce((a,x) => a + x.val, 0) / leituras.length) : null;
+    return { nome: `Q${n}`, media, leituras };
+  });
+
+  // Bombas de vácuo: status mais recente
+  const bombasStatus = [1,2,3,4,5].map((n) => {
+    const chave = `bombavacuo${n}_status`;
+    const leituras = valoresEq[chave] || [];
+    const ultimo = leituras.length ? leituras[leituras.length - 1].val : null;
+    return { nome: `BV${n}`, status: ultimo };
+  });
+
+  const corStatus = (s) => s === "Operando" ? "#3DDC84" : s === "Manutenção" ? "#F0997B" : "rgba(255,255,255,0.3)";
+  const labelRotina = (r) => r === "mecanica" ? "Mecânica" : r === "eletrica" ? "Elétrica" : "Start up";
+  const corRotina   = (r) => r === "mecanica" ? "#F5A623" : r === "eletrica" ? "#3B82F6" : "#2DD4BF";
+
+  const cardStyle = { background: "rgba(28,33,40,0.9)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: "24px", padding: "20px" };
+
+  return (
+    <div className="flex flex-col gap-4 pb-8">
+
+      {/* Seletor de período */}
+      <div className="flex rounded-2xl p-1" style={{ background: "rgba(28,33,40,0.9)", border: "1px solid rgba(255,255,255,0.07)" }}>
+        {[7, 30].map((p) => (
+          <button
+            key={p}
+            onClick={() => setPeriodo(p)}
+            className="flex-1 rounded-xl py-2 text-[13px] font-medium transition-all"
+            style={{
+              background: periodo === p ? tema.gradient : "transparent",
+              color: periodo === p ? "#0E1116" : "rgba(255,255,255,0.5)",
+            }}
+          >
+            {p === 7 ? "Últimos 7 dias" : "Últimos 30 dias"}
+          </button>
+        ))}
+      </div>
+
+      {/* KPIs gerais */}
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { label: "Taxa geral", valor: `${taxaGeral}%`, cor: tema.accent },
+          { label: "Dias com dados", valor: diasComDados, cor: "#3DDC84" },
+          { label: "Usuários", valor: usuarios.length, cor: "#3B82F6" },
+        ].map(({ label, valor, cor }) => (
+          <div key={label} style={{ ...cardStyle, padding: "14px", textAlign: "center" }}>
+            <p className="text-[22px] font-bold" style={{ color: cor }}>{valor}</p>
+            <p className="text-[10px] leading-tight mt-1" style={{ color: "rgba(255,255,255,0.4)" }}>{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Progresso hoje por usuário */}
+      <div style={cardStyle}>
+        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+          Hoje — {Object.keys(porUsuarioHoje).length > 0 ? `${Object.keys(porUsuarioHoje).length} usuário(s) ativos` : "nenhum registro ainda"}
+        </h3>
+        {Object.keys(porUsuarioHoje).length === 0 ? (
+          <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.3)" }}>Nenhum dado registrado hoje ainda.</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {Object.entries(porUsuarioHoje).map(([nome, d]) => {
+              const pct = d.total ? Math.round((d.checked / d.total) * 100) : 0;
+              return (
+                <div key={nome}>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="flex h-7 w-7 items-center justify-center rounded-xl text-[12px] font-bold"
+                        style={{ background: tema.accentSoft, color: tema.accent }}
+                      >
+                        {nome[0]}
+                      </div>
+                      <span className="text-[13px] font-medium text-white">{nome}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {[...d.rotinas].map((r) => (
+                        <span key={r} className="rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: `${corRotina(r)}20`, color: corRotina(r) }}>
+                          {labelRotina(r)}
+                        </span>
+                      ))}
+                      <span className="text-[12px] font-semibold" style={{ color: pct === 100 ? "#3DDC84" : "rgba(255,255,255,0.6)" }}>{pct}%</span>
+                    </div>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.07)" }}>
+                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: pct === 100 ? "#3DDC84" : tema.accent }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Gráfico de barras — progresso diário */}
+      <div style={cardStyle}>
+        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+          Progresso diário
+        </h3>
+        {diasOrdenados.length === 0 ? (
+          <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.3)" }}>Sem dados no período.</p>
+        ) : (
+          <div className="flex items-end gap-1.5" style={{ height: "80px" }}>
+            {diasOrdenados.map((dia) => {
+              const { checked, total } = porDia[dia];
+              const pct = total ? checked / total : 0;
+              const alturaMin = 4;
+              const altura = alturaMin + pct * (80 - alturaMin);
+              const dd = dia.slice(8);
+              return (
+                <div key={dia} className="flex flex-1 flex-col items-center gap-1">
+                  <div
+                    className="w-full rounded-t-md transition-all"
+                    style={{ height: `${altura}px`, background: pct > 0.8 ? "#3DDC84" : pct > 0.5 ? tema.accent : "rgba(255,255,255,0.15)" }}
+                  />
+                  <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.3)" }}>{dd}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Queimadores — temperatura média */}
+      <div style={cardStyle}>
+        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+          Queimadores — temp. média (°C)
+        </h3>
+        <div className="flex gap-3">
+          {queimadoresTemp.map(({ nome, media }) => (
+            <div
+              key={nome}
+              className="flex flex-1 flex-col items-center gap-1 rounded-2xl py-4"
+              style={{ background: "rgba(255,255,255,0.04)" }}
+            >
+              <span className="text-[20px] font-bold" style={{ color: media ? "#F0997B" : "rgba(255,255,255,0.2)" }}>
+                {media !== null ? `${media}°` : "—"}
+              </span>
+              <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>{nome}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Bombas de vácuo — status atual */}
+      <div style={cardStyle}>
+        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+          Bombas de vácuo — status
+        </h3>
+        <div className="flex gap-2 flex-wrap">
+          {bombasStatus.map(({ nome, status }) => (
+            <div
+              key={nome}
+              className="flex flex-col items-center gap-1.5 rounded-2xl px-4 py-3"
+              style={{ background: "rgba(255,255,255,0.04)", minWidth: "56px" }}
+            >
+              <div className="h-2.5 w-2.5 rounded-full" style={{ background: corStatus(status) }} />
+              <span className="text-[11px] font-semibold text-white">{nome}</span>
+              <span className="text-[9px] text-center leading-tight" style={{ color: "rgba(255,255,255,0.4)" }}>
+                {status || "—"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Lista de usuários cadastrados */}
+      <div style={cardStyle}>
+        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+          Usuários cadastrados
+        </h3>
+        <div className="flex flex-col gap-2">
+          {usuarios.map((u) => {
+            const meusReg = registros.filter((r) => r.usuario_id === u.id);
+            const diasU = new Set(meusReg.map((r) => r.data)).size;
+            return (
+              <div key={u.id} className="flex items-center gap-3 rounded-2xl px-3 py-2.5" style={{ background: "rgba(255,255,255,0.04)" }}>
+                <div
+                  className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl text-[13px] font-bold"
+                  style={{ background: tema.accentSoft, color: tema.accent }}
+                >
+                  {u.foto_url
+                    ? <img src={u.foto_url} alt="" className="h-full w-full object-cover" />
+                    : u.nome[0].toUpperCase()
+                  }
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-medium text-white truncate">{u.nome} {u.sobrenome}</p>
+                  <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>{diasU} dia(s) com registro</p>
+                </div>
+              </div>
+            );
+          })}
+          {usuarios.length === 0 && (
+            <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.3)" }}>Nenhum usuário cadastrado ainda.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ----------------------------------------------------------------------------
 // LOGIN MODAL
@@ -1681,7 +2310,9 @@ function MaintenanceApp() {
   const TOTAL_ITENS = useMemo(() => totalItensDe(AREAS), [AREAS]);
   const storageKey = useMemo(() => chaveDoDia(today, tipoRotina), [today, tipoRotina]);
 
-  // ── Usuário e auto-login ──────────────────────────────────────────────────
+  // ── Navegação ─────────────────────────────────────────────────────────────
+  const [pagina, setPagina] = useState("checklist"); // checklist | perfil | dashboard
+  const [menuAberto, setMenuAberto] = useState(false);
   const [usuario, setUsuario] = useState(() => {
     return JSON.parse(localStorage.getItem("usuario_sessao") || "null");
   });
@@ -2180,15 +2811,20 @@ function MaintenanceApp() {
   return (
     <div
       className="relative min-h-full w-full"
-      style={{
-        background: "#0E1116",
-        fontFamily: "'Inter', -apple-system, sans-serif",
-      }}
+      style={{ background: "#0E1116", fontFamily: "'Inter', -apple-system, sans-serif" }}
     >
-      {/* Modal de login — exibido quando não há sessão ativa */}
-      {!usuario && (
-        <LoginModal onLogin={(u) => setUsuario(u)} />
-      )}
+      {/* Modal de login */}
+      {!usuario && <LoginModal onLogin={(u) => setUsuario(u)} />}
+
+      {/* Menu lateral */}
+      <MenuLateral
+        aberto={menuAberto}
+        onFechar={() => setMenuAberto(false)}
+        paginaAtual={pagina}
+        onNavegar={setPagina}
+        usuario={usuario}
+        tema={tema}
+      />
 
       {/* Textura sutil de fundo */}
       <div
@@ -2226,127 +2862,126 @@ function MaintenanceApp() {
 
         {/* Header */}
         <div className="mb-5 flex items-center justify-between">
-          <div>
-            <div
-              className="font-mono text-[11px] font-medium uppercase tracking-wider transition-colors duration-300"
-              style={{ color: tema.accent }}
+          <div className="flex items-center gap-3">
+            {/* Botão hambúrguer */}
+            <button
+              onClick={() => setMenuAberto(true)}
+              className="flex h-9 w-9 flex-col items-center justify-center gap-1.5 rounded-xl"
+              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
             >
-              Rotina diária — {rotinaAtual.label}
-            </div>
-            <h1 className="text-[20px] font-bold leading-tight text-white">
-              {usuario ? `${saudacao}, ${usuario.nome}!` : "Checklist de manutenção"}
-            </h1>
-            <p className="mt-0.5 text-[12.5px]" style={{ color: "rgba(255,255,255,0.4)" }}>
-              {formatarDataLonga(today)}
-            </p>
-
-            {/* Resumo do dia anterior */}
-            {(resumoDiaAnterior.mecanica || resumoDiaAnterior.eletrica) && (
+              {[0,1,2].map((i) => (
+                <span key={i} className="block h-0.5 w-4 rounded-full" style={{ background: "rgba(255,255,255,0.7)" }} />
+              ))}
+            </button>
+            <div>
               <div
-                className="mt-2.5 rounded-xl px-3 py-2"
-                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
+                className="font-mono text-[11px] font-medium uppercase tracking-wider transition-colors duration-300"
+                style={{ color: tema.accent }}
               >
-                <p className="mb-1 text-[10px] font-medium uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.35)" }}>
-                  Ontem
-                </p>
-                <div className="flex flex-col gap-0.5">
-                  {resumoDiaAnterior.mecanica && (
-                    <p className="text-[12px]" style={{ color: "rgba(255,255,255,0.6)" }}>
-                      <span style={{ color: "#F5A623" }}>Mecânica</span>{" "}
-                      — {resumoDiaAnterior.mecanica.concluidos}/{resumoDiaAnterior.mecanica.total} itens
-                      {" "}({resumoDiaAnterior.mecanica.percentual}%)
-                    </p>
-                  )}
-                  {resumoDiaAnterior.eletrica && (
-                    <p className="text-[12px]" style={{ color: "rgba(255,255,255,0.6)" }}>
-                      <span style={{ color: "#3B82F6" }}>Elétrica</span>{" "}
-                      — {resumoDiaAnterior.eletrica.concluidos}/{resumoDiaAnterior.eletrica.total} itens
-                      {" "}({resumoDiaAnterior.eletrica.percentual}%)
-                    </p>
-                  )}
-                </div>
+                {pagina === "checklist" ? `Rotina — ${rotinaAtual.label}` : pagina === "perfil" ? "Meu perfil" : "Dashboard"}
               </div>
-            )}
-
-            {loadError && (
-              <p className="mt-1 text-[11px] font-medium" style={{ color: "#F0997B" }}>
-                ⚠ Não foi possível carregar o progresso salvo ({loadError}). Começando do zero.
+              <h1 className="text-[18px] font-bold leading-tight text-white">
+                {pagina === "checklist"
+                  ? (usuario ? `${saudacao}, ${usuario.nome}!` : "Checklist")
+                  : pagina === "perfil" ? `${usuario?.nome} ${usuario?.sobrenome}`
+                  : "Métricas gerais"}
+              </h1>
+              <p className="mt-0.5 text-[12px]" style={{ color: "rgba(255,255,255,0.4)" }}>
+                {formatarDataLonga(today)}
               </p>
-            )}
+            </div>
           </div>
-          <div className="flex flex-col items-end gap-1.5">
+
+          {/* Avatar no topo direito */}
+          <button
+            onClick={() => setPagina("perfil")}
+            className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl"
+            style={{ background: tema.accentSoft, border: `1.5px solid ${tema.accentBorder}` }}
+          >
+            {usuario?.foto_url
+              ? <img src={usuario.foto_url} alt="" className="h-full w-full object-cover" />
+              : <span className="text-[15px] font-bold" style={{ color: tema.accent }}>
+                  {usuario?.nome?.[0]?.toUpperCase() || "?"}
+                </span>
+            }
+          </button>
+        </div>
+
+        {/* Resumo do dia anterior (só no checklist) */}
+        {pagina === "checklist" && (resumoDiaAnterior.mecanica || resumoDiaAnterior.eletrica) && (
+          <div
+            className="mb-4 rounded-xl px-3 py-2"
+            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
+          >
+            <p className="mb-1 text-[10px] font-medium uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.35)" }}>Ontem</p>
+            <div className="flex flex-col gap-0.5">
+              {resumoDiaAnterior.mecanica && (
+                <p className="text-[12px]" style={{ color: "rgba(255,255,255,0.6)" }}>
+                  <span style={{ color: "#F5A623" }}>Mecânica</span>{" "}
+                  — {resumoDiaAnterior.mecanica.concluidos}/{resumoDiaAnterior.mecanica.total} itens ({resumoDiaAnterior.mecanica.percentual}%)
+                </p>
+              )}
+              {resumoDiaAnterior.eletrica && (
+                <p className="text-[12px]" style={{ color: "rgba(255,255,255,0.6)" }}>
+                  <span style={{ color: "#3B82F6" }}>Elétrica</span>{" "}
+                  — {resumoDiaAnterior.eletrica.concluidos}/{resumoDiaAnterior.eletrica.total} itens ({resumoDiaAnterior.eletrica.percentual}%)
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {loadError && pagina === "checklist" && (
+          <p className="mb-3 text-[11px] font-medium" style={{ color: "#F0997B" }}>
+            ⚠ Não foi possível carregar o progresso ({loadError}).
+          </p>
+        )}
+
+        {/* Telas */}
+        {pagina === "perfil" && (
+          <TelaPerfil
+            usuario={usuario}
+            onAtualizarUsuario={setUsuario}
+            tema={tema}
+          />
+        )}
+        {pagina === "dashboard" && (
+          <TelaDashboard tema={tema} today={today} />
+        )}
+        {pagina === "checklist" && (<>
+          {/* Indicador de save + botão reiniciar */}
+          <div className="mb-2 flex items-center justify-between">
             <span
               className="flex items-center gap-1.5 text-[10.5px] font-medium"
               style={{
-                color:
-                  saveState === "error"
-                    ? "#F0997B"
-                    : saveState === "saving"
-                    ? "rgba(255,255,255,0.35)"
-                    : saveState === "saved"
-                    ? "#3DDC84"
-                    : "rgba(255,255,255,0.3)",
+                color: saveState === "error" ? "#F0997B" : saveState === "saving" ? "rgba(255,255,255,0.35)" : saveState === "saved" ? "#3DDC84" : "rgba(255,255,255,0.3)",
               }}
             >
-              <span
-                className="h-1.5 w-1.5 rounded-full"
-                style={{
-                  background:
-                    saveState === "error"
-                      ? "#E24B4A"
-                      : saveState === "saving"
-                      ? "rgba(255,255,255,0.35)"
-                      : saveState === "saved"
-                      ? "#3DDC84"
-                      : "rgba(255,255,255,0.25)",
-                }}
-              />
-              {saveState === "error"
-                ? "Falha ao salvar"
-                : saveState === "saving"
-                ? "Salvando..."
-                : saveState === "saved"
-                ? "Progresso salvo"
-                : "Pronto"}
+              <span className="h-1.5 w-1.5 rounded-full" style={{ background: saveState === "error" ? "#E24B4A" : saveState === "saving" ? "rgba(255,255,255,0.35)" : saveState === "saved" ? "#3DDC84" : "rgba(255,255,255,0.25)" }} />
+              {saveState === "error" ? "Falha ao salvar" : saveState === "saving" ? "Salvando..." : saveState === "saved" ? "Progresso salvo" : "Pronto"}
             </span>
-            <button
-              onClick={() => setResetConfirm(true)}
-              className="text-[10.5px] font-medium underline"
-              style={{ color: "rgba(255,255,255,0.3)" }}
-            >
+            <button onClick={() => setResetConfirm(true)} className="text-[10.5px] font-medium underline" style={{ color: "rgba(255,255,255,0.3)" }}>
               Reiniciar rotina
             </button>
           </div>
-        </div>
 
-        {/* Painel de progresso geral */}
-        <div
-          className="mb-5 flex items-center gap-4 rounded-2xl p-4"
-          style={{
-            background: "rgba(28,33,40,0.9)",
-            border: "1px solid rgba(255,255,255,0.07)",
-          }}
-        >
-          <ProgressRing progress={overallProgress} size={56} stroke={5} color={tema.accent} />
-          <div className="flex-1">
-            <div className="text-[18px] font-bold text-white">
-              {totalChecked}/{TOTAL_ITENS}
-              <span className="ml-1.5 text-[12px] font-normal" style={{ color: "rgba(255,255,255,0.4)" }}>
-                itens verificados
-              </span>
-            </div>
-            <div className="mt-1 flex gap-3 text-[11.5px]" style={{ color: "rgba(255,255,255,0.45)" }}>
-              <span className="flex items-center gap-1">
-                <CheckCircle2 size={12} style={{ color: "#3DDC84" }} />
-                {areasSalvas} áreas concluídas
-              </span>
-              <span className="flex items-center gap-1">
-                <MessageSquarePlus size={12} style={{ color: tema.accent }} />
-                {areasComObservacao} c/ observações
-              </span>
+          {/* Painel de progresso geral */}
+          <div
+            className="mb-5 flex items-center gap-4 rounded-2xl p-4"
+            style={{ background: "rgba(28,33,40,0.9)", border: "1px solid rgba(255,255,255,0.07)" }}
+          >
+            <ProgressRing progress={overallProgress} size={56} stroke={5} color={tema.accent} />
+            <div className="flex-1">
+              <div className="text-[18px] font-bold text-white">
+                {totalChecked}/{TOTAL_ITENS}
+                <span className="ml-1.5 text-[12px] font-normal" style={{ color: "rgba(255,255,255,0.4)" }}>itens verificados</span>
+              </div>
+              <div className="mt-1 flex gap-3 text-[11.5px]" style={{ color: "rgba(255,255,255,0.45)" }}>
+                <span className="flex items-center gap-1"><CheckCircle2 size={12} style={{ color: "#3DDC84" }} />{areasSalvas} áreas concluídas</span>
+                <span className="flex items-center gap-1"><MessageSquarePlus size={12} style={{ color: tema.accent }} />{areasComObservacao} c/ observações</span>
+              </div>
             </div>
           </div>
-        </div>
 
         {/* Grid de áreas */}
         {AREAS.length === 0 ? (
@@ -2381,9 +3016,11 @@ function MaintenanceApp() {
             ))}
           </div>
         )}
+        </>)}
       </div>
 
-      {/* Botões flutuantes de gerar relatório */}
+      {/* Botões flutuantes — só no checklist */}
+      {pagina === "checklist" && (
       <div className="fixed inset-x-0 bottom-0 z-40 mx-auto flex max-w-md flex-col gap-2 px-4 pb-5">
 
         {/* Botão "Ontem" — aparece sempre (carregando ou com dados) */}
@@ -2431,6 +3068,7 @@ function MaintenanceApp() {
           </button>
         </div>
       </div>
+      )}
 
       {/* Modais */}
       {openArea && status[openArea.id] && (
