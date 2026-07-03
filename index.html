@@ -39,7 +39,7 @@
 <body>
 <div id="root"></div>
 
-<script type="text/babel" data-presets="react">
+<script type="text/babel" data-presets="react,env">
 const { useState, useMemo, useRef, useEffect } = React;
 
 // ----------------------------------------------------------------------------
@@ -108,7 +108,7 @@ const ImageIcon = makeIcon("Image");
 const Trash2 = makeIcon("Trash2");
 
 </script>
-<script type="text/babel" data-presets="react">
+<script type="text/babel" data-presets="react,env">
 
 // ----------------------------------------------------------------------------
 // SUPABASE — cliente leve sem SDK (fetch direto para a REST API)
@@ -832,7 +832,7 @@ function MenuLateral({ aberto, onFechar, paginaAtual, onNavegar, usuario, tema }
             className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl"
             style={{ background: tema.accentSoft, border: `1px solid ${tema.accentBorder}` }}
           >
-            {usuario?.foto_url
+            {usuario && usuario.foto_url
               ? <img src={usuario.foto_url} alt="" className="h-full w-full object-cover" />
               : <span className="text-[17px] font-bold" style={{ color: tema.accent }}>
                   {usuario ? usuario.nome[0].toUpperCase() : "?"}
@@ -904,7 +904,7 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
 
   // Busca métricas pessoais do usuário
   useEffect(() => {
-    if (!usuario?.id) return;
+    if (!usuario && usuario.id) return;
     async function carregar() {
       try {
         const dados = await supaGetHistorico(30);
@@ -925,8 +925,8 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
   }, [usuario]);
 
   async function handleFoto(e) {
-    const file = e.target.files?.[0];
-    if (!file || !usuario?.id) return;
+    const file = e.target.files && e.target.files[0];
+    if (!file || !usuario && usuario.id) return;
     setFotoCarregando(true);
     try {
       const url = await supaUploadAvatar(usuario.id, file);
@@ -985,15 +985,15 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
           >
             {fotoCarregando
               ? <div className="text-[11px]" style={{ color: tema.accent }}>...</div>
-              : usuario?.foto_url
+              : (usuario && usuario.foto_url)
                 ? <img src={usuario.foto_url} alt="" className="h-full w-full object-cover" />
                 : <span className="text-[28px] font-bold" style={{ color: tema.accent }}>
-                    {usuario?.nome?.[0]?.toUpperCase() || "?"}
+                    {(usuario && usuario.nome ? usuario.nome[0].toUpperCase() : "?") || "?"}
                   </span>
             }
           </div>
           <button
-            onClick={() => fileRef.current?.click()}
+            onClick={() => fileRef.current && fileRef.current.click()}
             className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full"
             style={{ background: tema.gradient, color: "#0E1116" }}
           >
@@ -1002,7 +1002,7 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFoto} />
         </div>
         <div className="text-center">
-          <h2 className="text-[18px] font-bold text-white">{usuario?.nome} {usuario?.sobrenome}</h2>
+          <h2 className="text-[18px] font-bold text-white">{usuario ? usuario.nome : ""} {usuario ? usuario.sobrenome : ""}</h2>
           <p className="text-[12px]" style={{ color: "rgba(255,255,255,0.4)" }}>Equipe de Manutenção</p>
         </div>
       </div>
@@ -2883,7 +2883,7 @@ function MaintenanceApp() {
               <h1 className="text-[18px] font-bold leading-tight text-white">
                 {pagina === "checklist"
                   ? (usuario ? `${saudacao}, ${usuario.nome}!` : "Checklist")
-                  : pagina === "perfil" ? `${usuario?.nome} ${usuario?.sobrenome}`
+                  : pagina === "perfil" ? (usuario ? usuario.nome + " " + usuario.sobrenome : "Perfil")
                   : "Métricas gerais"}
               </h1>
               <p className="mt-0.5 text-[12px]" style={{ color: "rgba(255,255,255,0.4)" }}>
@@ -2898,10 +2898,10 @@ function MaintenanceApp() {
             className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl"
             style={{ background: tema.accentSoft, border: `1.5px solid ${tema.accentBorder}` }}
           >
-            {usuario?.foto_url
+            {usuario && usuario.foto_url
               ? <img src={usuario.foto_url} alt="" className="h-full w-full object-cover" />
               : <span className="text-[15px] font-bold" style={{ color: tema.accent }}>
-                  {usuario?.nome?.[0]?.toUpperCase() || "?"}
+                  {(usuario && usuario.nome ? usuario.nome[0].toUpperCase() : "?") || "?"}
                 </span>
             }
           </button>
@@ -3166,7 +3166,7 @@ function MaintenanceApp() {
 }
 
 </script>
-<script type="text/babel" data-presets="react">
+<script type="text/babel" data-presets="react,env">
 ReactDOM.createRoot(document.getElementById("root")).render(<MaintenanceApp />);
 </script>
 
