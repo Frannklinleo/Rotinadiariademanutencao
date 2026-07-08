@@ -155,7 +155,8 @@ async function supaCreateUsuario(nome, sobrenome, senha) {
 
 // Upsert de um registro de área (por usuario_id + tipo_rotina + data + area_id)
 async function supaUpsertRegistro(registro) {
-  return supaFetch("/registros_diarios", {
+  const onConflict = "usuario_id,tipo_rotina,data,area_id";
+  return supaFetch(`/registros_diarios?on_conflict=${onConflict}`, {
     method: "POST",
     headers: { "Prefer": "resolution=merge-duplicates,return=representation" },
     body: JSON.stringify(registro),
