@@ -204,10 +204,19 @@ async function supaUploadAvatar(userId, file) {
   const path = `${userId}.${ext}`;
   const res = await fetch(`${SUPA_URL}/storage/v1/object/avatars/${path}`, {
     method: "POST",
-    headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}`, "Content-Type": file.type, "x-upsert": "true" },
+    headers: {
+      "apikey": SUPA_KEY,
+      "Authorization": `Bearer ${SUPA_KEY}`,
+      "Content-Type": file.type,
+      "x-upsert": "true",
+    },
     body: file,
   });
-  if (!res.ok) throw new Error("Falha no upload da foto");
+  if (!res.ok) {
+    let detalhe = "";
+    try { detalhe = await res.text(); } catch (_) {}
+    throw new Error(`Upload falhou (${res.status}): ${detalhe || "verifique se o bucket 'avatars' existe e é público"}`);
+  }
   return `${SUPA_URL}/storage/v1/object/public/avatars/${path}?t=${Date.now()}`;
 }
 
@@ -877,7 +886,9 @@ function ProgressRing({ progress, size = 44, stroke = 4, color = "#F5A623", trac
 // MENU LATERAL
 // ----------------------------------------------------------------------------
 
-function MenuLateral({ aberto, onFechar, paginaAtual, onNavegar, usuario, tema }) {
+function MenuLateral({ aberto, onFechar, paginaAtual, onNavegar, usuario, tema, onSair }) {
+  const [confirmandoSaida, setConfirmandoSaida] = useState(false);
+
   const itens = [
     { id: "checklist", icon: ClipboardList, label: "Checklist" },
     { id: "perfil",    icon: Settings2,     label: "Meu perfil" },
@@ -959,6 +970,42 @@ function MenuLateral({ aberto, onFechar, paginaAtual, onNavegar, usuario, tema }
 
         <div className="mx-4 mb-4 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
 
+        {/* Sair */}
+        <div className="px-3 pb-3">
+          {!confirmandoSaida ? (
+            <button
+              onClick={() => setConfirmandoSaida(true)}
+              className="flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-all"
+              style={{ color: "#F0997B" }}
+            >
+              <X size={18} strokeWidth={2} />
+              <span className="text-[14px] font-medium">Sair da conta</span>
+            </button>
+          ) : (
+            <div className="flex flex-col gap-2 rounded-2xl p-3" style={{ background: "rgba(240,153,123,0.08)", border: "1px solid rgba(240,153,123,0.25)" }}>
+              <p className="text-[12px]" style={{ color: "rgba(255,255,255,0.6)" }}>
+                Tem certeza? Você precisará digitar o PIN novamente para entrar.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setConfirmandoSaida(false)}
+                  className="flex-1 rounded-xl py-2 text-[12.5px] font-medium"
+                  style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)" }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => { onSair(); setConfirmandoSaida(false); }}
+                  className="flex-1 rounded-xl py-2 text-[12.5px] font-semibold"
+                  style={{ background: "#F0997B", color: "#0E1116" }}
+                >
+                  Sair
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Versão */}
         <p className="px-5 pb-8 text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>
           Rotina de Manutenção v2.0
@@ -979,6 +1026,7 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
   const [novaSenha, setNovaSenha] = useState("");
   const [confirmarNovaSenha, setConfirmarNovaSenha] = useState("");
   const [msgSenha, setMsgSenha] = useState(null); // { tipo: "ok"|"erro", texto }
+  const [mostrarSenhas, setMostrarSenhas] = useState(false);
   const [metricas, setMetricas] = useState(null);
   const fileRef = useRef(null);
 
@@ -1006,7 +1054,12 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
 
   async function handleFoto(e) {
     const file = e.target.files && e.target.files[0];
-    if (!file || !usuario && usuario.id) return;
+    if (!file || !usuario || !usuario.id) {
+      if (usuario && !usuario.id) {
+        alert("Sua sessão não está sincronizada com o servidor. Saia e entre novamente antes de enviar uma foto.");
+      }
+      return;
+    }
     setFotoCarregando(true);
     try {
       const url = await supaUploadAvatar(usuario.id, file);
@@ -1014,8 +1067,8 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
       const atualizado = { ...usuario, foto_url: url };
       localStorage.setItem("usuario_sessao", JSON.stringify(atualizado));
       onAtualizarUsuario(atualizado);
-    } catch (_) {
-      alert("Erro ao enviar foto. Tente novamente.");
+    } catch (err) {
+      alert(`Erro ao enviar foto: ${err && err.message ? err.message : "tente novamente"}`);
     }
     setFotoCarregando(false);
     e.target.value = "";
@@ -1023,24 +1076,42 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
 
   async function handleAlterarSenha() {
     setMsgSenha(null);
-    const salvo = JSON.parse(localStorage.getItem("usuario_rotina") || "null");
-    if (!salvo || senhaAtual !== salvo.senha) {
-      setMsgSenha({ tipo: "erro", texto: "Senha atual incorreta." }); return;
-    }
+
     if (novaSenha.length !== 4 || !/^\d{4}$/.test(novaSenha)) {
       setMsgSenha({ tipo: "erro", texto: "Nova senha deve ter 4 dígitos." }); return;
     }
     if (novaSenha !== confirmarNovaSenha) {
       setMsgSenha({ tipo: "erro", texto: "As senhas não coincidem." }); return;
     }
+
+    // Valida a senha atual contra o Supabase (fonte da verdade), com fallback local
+    let senhaValida = false;
     try {
-      await supaAtualizarSenha(usuario.id, novaSenha);
-      localStorage.setItem("usuario_rotina", JSON.stringify({ ...salvo, senha: novaSenha }));
+      const usuarioDb = await supaGetUsuario(usuario.nome, usuario.sobrenome);
+      if (usuarioDb) {
+        senhaValida = senhaAtual === usuarioDb.senha;
+      } else {
+        const salvo = JSON.parse(localStorage.getItem("usuario_rotina") || "null");
+        senhaValida = !!salvo && senhaAtual === salvo.senha;
+      }
+    } catch (_) {
+      const salvo = JSON.parse(localStorage.getItem("usuario_rotina") || "null");
+      senhaValida = !!salvo && senhaAtual === salvo.senha;
+    }
+
+    if (!senhaValida) {
+      setMsgSenha({ tipo: "erro", texto: "Senha atual incorreta." }); return;
+    }
+
+    try {
+      if (usuario.id) await supaAtualizarSenha(usuario.id, novaSenha);
+      const salvoAtual = JSON.parse(localStorage.getItem("usuario_rotina") || "null") || { nome: usuario.nome, sobrenome: usuario.sobrenome };
+      localStorage.setItem("usuario_rotina", JSON.stringify({ ...salvoAtual, senha: novaSenha }));
       setMsgSenha({ tipo: "ok", texto: "Senha alterada com sucesso!" });
       setSenhaAtual(""); setNovaSenha(""); setConfirmarNovaSenha("");
       setAlterandoSenha(false);
     } catch (_) {
-      setMsgSenha({ tipo: "erro", texto: "Erro ao alterar senha. Tente novamente." });
+      setMsgSenha({ tipo: "erro", texto: "Erro ao salvar nova senha no servidor. Tente novamente." });
     }
   }
 
@@ -1142,15 +1213,25 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
             ].map(({ label, val, set }) => (
               <div key={label}>
                 <label className="mb-1 block text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>{label}</label>
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={4}
-                  value={val}
-                  onChange={(e) => set(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                  style={inputStyle}
-                  placeholder="••••"
-                />
+                <div className="relative">
+                  <input
+                    type={mostrarSenhas ? "text" : "password"}
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={val}
+                    onChange={(e) => set(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                    style={{ ...inputStyle, paddingRight: "40px" }}
+                    placeholder="••••"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setMostrarSenhas(!mostrarSenhas)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-medium"
+                    style={{ color: "rgba(255,255,255,0.4)" }}
+                  >
+                    {mostrarSenhas ? "Ocultar" : "Ver"}
+                  </button>
+                </div>
               </div>
             ))}
 
@@ -2989,6 +3070,11 @@ function MaintenanceApp() {
         onNavegar={setPagina}
         usuario={usuario}
         tema={tema}
+        onSair={() => {
+          localStorage.removeItem("usuario_sessao");
+          setUsuario(null);
+          setPagina("checklist");
+        }}
       />
 
       {/* Textura sutil de fundo */}
