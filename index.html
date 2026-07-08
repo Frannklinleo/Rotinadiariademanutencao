@@ -282,6 +282,13 @@ const AREAS_MECANICA = [
       "Verificar existência de vazamentos de resinas e TDI.",
       "Verificar estado dos manômetros e trocá-los se necessário.",
       "Verificar o funcionamento das bombas e agitadores quanto ao funcionamento e ruídos anormais.",
+      {
+        label: "Skid de TDI",
+        campos: [
+          { id: "skidtdi_ponto_orvalho", label: "Pto. Orvalho", tipo: "number", unidade: "°C" },
+          { id: "skidtdi_temp_ar_seco", label: "Temp. Ar Seco", tipo: "number", unidade: "°C", recomendado: "< 40°C" },
+        ],
+      },
     ],
   },
   {
@@ -458,6 +465,39 @@ const AREAS_MECANICA = [
           { id: "bombavacuo5_horimetro", label: "Horímetro", tipo: "number", unidade: "h" },
         ],
       },
+      {
+        label: "Compressor Ingersoll",
+        campos: [
+          { id: "compingersoll_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
+          { id: "compingersoll_horascarga", label: "Horas em carga", tipo: "number", unidade: "h" },
+        ],
+      },
+      {
+        label: "Compressor Konffiar (alugado)",
+        campos: [
+          { id: "compkonffiar_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
+          { id: "compkonffiar_horascarga", label: "Horas em carga", tipo: "number", unidade: "h" },
+        ],
+      },
+      {
+        label: "Compressor ar respirável",
+        campos: [
+          { id: "comparresp_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
+          { id: "comparresp_horascarga", label: "Horas em carga", tipo: "number", unidade: "h" },
+        ],
+      },
+      {
+        label: "Secador DPR 020",
+        campos: [
+          { id: "secadordpr020_temp", label: "Temperatura", tipo: "number", unidade: "°C" },
+        ],
+      },
+      {
+        label: "Manômetro da linha",
+        campos: [
+          { id: "manometrolinha_pressao", label: "Pressão", tipo: "number", unidade: " Psi" },
+        ],
+      },
     ],
   },
   {
@@ -505,6 +545,13 @@ const AREAS_ELETRICA = [
       "Verificar funcionamento dos ventiladores dos unidrives.",
       "Verificar funcionamento do ar-condicionado dos painéis dos unidrives e esvaziar a água condensada no reservatório.",
       "Verificar existência de lâmpadas queimadas nos painéis elétricos.",
+      {
+        label: "Skid de TDI",
+        campos: [
+          { id: "skidtdi_ponto_orvalho", label: "Pto. Orvalho", tipo: "number", unidade: "°C" },
+          { id: "skidtdi_temp_ar_seco", label: "Temp. Ar Seco", tipo: "number", unidade: "°C", recomendado: "< 40°C" },
+        ],
+      },
     ],
   },
   {
@@ -631,6 +678,39 @@ const AREAS_ELETRICA = [
         campos: [
           { id: "bombavacuo5_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "bombavacuo5_horimetro", label: "Horímetro", tipo: "number", unidade: "h" },
+        ],
+      },
+      {
+        label: "Compressor Ingersoll",
+        campos: [
+          { id: "compingersoll_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
+          { id: "compingersoll_horascarga", label: "Horas em carga", tipo: "number", unidade: "h" },
+        ],
+      },
+      {
+        label: "Compressor Konffiar (alugado)",
+        campos: [
+          { id: "compkonffiar_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
+          { id: "compkonffiar_horascarga", label: "Horas em carga", tipo: "number", unidade: "h" },
+        ],
+      },
+      {
+        label: "Compressor ar respirável",
+        campos: [
+          { id: "comparresp_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
+          { id: "comparresp_horascarga", label: "Horas em carga", tipo: "number", unidade: "h" },
+        ],
+      },
+      {
+        label: "Secador DPR 020",
+        campos: [
+          { id: "secadordpr020_temp", label: "Temperatura", tipo: "number", unidade: "°C" },
+        ],
+      },
+      {
+        label: "Manômetro da linha",
+        campos: [
+          { id: "manometrolinha_pressao", label: "Pressão", tipo: "number", unidade: " Psi" },
         ],
       },
     ],
@@ -1191,6 +1271,36 @@ function TelaDashboard({ tema, today }) {
   const labelRotina = (r) => r === "mecanica" ? "Mecânica" : r === "eletrica" ? "Elétrica" : "Start up";
   const corRotina   = (r) => r === "mecanica" ? "#F5A623" : r === "eletrica" ? "#3B82F6" : "#2DD4BF";
 
+  // ── Ranking de usuários (por itens concluídos no período selecionado) ────
+  const porUsuarioPeriodo = {};
+  registros.forEach((r) => {
+    const chave = r.usuario_nome;
+    if (!porUsuarioPeriodo[chave]) {
+      porUsuarioPeriodo[chave] = { checked: 0, total: 0, dias: new Set(), usuario_id: r.usuario_id };
+    }
+    porUsuarioPeriodo[chave].checked += r.checked_items ? r.checked_items.filter(Boolean).length : 0;
+    porUsuarioPeriodo[chave].total   += r.checked_items ? r.checked_items.length : 0;
+    porUsuarioPeriodo[chave].dias.add(r.data);
+  });
+
+  const ranking = Object.entries(porUsuarioPeriodo)
+    .map(([nome, d]) => ({
+      nome,
+      checked: d.checked,
+      total: d.total,
+      dias: d.dias.size,
+      pct: d.total ? Math.round((d.checked / d.total) * 100) : 0,
+      usuario_id: d.usuario_id,
+    }))
+    .sort((a, b) => b.checked - a.checked || b.dias - a.dias);
+
+  const usuarioFoto = (id) => {
+    const u = usuarios.find((x) => x.id === id);
+    return u ? u.foto_url : null;
+  };
+
+  const medalha = (pos) => pos === 0 ? "🥇" : pos === 1 ? "🥈" : pos === 2 ? "🥉" : null;
+
   const cardStyle = { background: "rgba(28,33,40,0.9)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: "24px", padding: "20px" };
 
   return (
@@ -1339,6 +1449,48 @@ function TelaDashboard({ tema, today }) {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Ranking de usuários */}
+      <div style={cardStyle}>
+        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+          🏆 Ranking — {periodo === 7 ? "últimos 7 dias" : "últimos 30 dias"}
+        </h3>
+        {ranking.length === 0 ? (
+          <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.3)" }}>Sem dados no período.</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {ranking.map((r, idx) => {
+              const foto = usuarioFoto(r.usuario_id);
+              const med = medalha(idx);
+              return (
+                <div
+                  key={r.nome}
+                  className="flex items-center gap-3 rounded-2xl px-3 py-2.5"
+                  style={{ background: idx === 0 ? "rgba(245,166,35,0.08)" : "rgba(255,255,255,0.04)", border: idx === 0 ? "1px solid rgba(245,166,35,0.25)" : "1px solid transparent" }}
+                >
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center text-[13px] font-bold" style={{ color: "rgba(255,255,255,0.4)" }}>
+                    {med || `${idx + 1}º`}
+                  </div>
+                  <div
+                    className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl text-[13px] font-bold"
+                    style={{ background: tema.accentSoft, color: tema.accent }}
+                  >
+                    {foto ? <img src={foto} alt="" className="h-full w-full object-cover" /> : r.nome[0].toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-medium text-white">{r.nome}</p>
+                    <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>{r.dias} dia(s) ativos</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[15px] font-bold" style={{ color: tema.accent }}>{r.checked}</p>
+                    <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>itens ({r.pct}%)</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Lista de usuários cadastrados */}
@@ -1966,29 +2118,38 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
                               ))}
                             </select>
                           ) : (
-                            <div className="relative flex items-center">
-                              <input
-                                type="number"
-                                inputMode="decimal"
-                                value={valores[campo.id] || ""}
-                                onChange={(e) => onChangeValor(area.id, campo.id, e.target.value)}
-                                placeholder="0"
-                                className="w-full rounded-lg px-2.5 py-2 pr-9 text-[13px] outline-none"
-                                style={{
-                                  background: "rgba(255,255,255,0.06)",
-                                  border: "1px solid rgba(255,255,255,0.12)",
-                                  color: "white",
-                                }}
-                              />
-                              {campo.unidade && (
-                                <span
-                                  className="pointer-events-none absolute right-2.5 text-[11.5px] font-medium"
-                                  style={{ color: "rgba(255,255,255,0.4)" }}
-                                >
-                                  {campo.unidade}
+                            <>
+                              <div className="relative flex items-center">
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  value={valores[campo.id] || ""}
+                                  onChange={(e) => onChangeValor(area.id, campo.id, e.target.value)}
+                                  placeholder="0"
+                                  className="w-full rounded-lg px-2.5 py-2 pr-9 text-[13px] outline-none"
+                                  style={{
+                                    background: "rgba(255,255,255,0.06)",
+                                    border: campo.recomendado && valores[campo.id] && parseFloat(valores[campo.id]) >= 40
+                                      ? "1px solid rgba(240,153,123,0.5)"
+                                      : "1px solid rgba(255,255,255,0.12)",
+                                    color: "white",
+                                  }}
+                                />
+                                {campo.unidade && (
+                                  <span
+                                    className="pointer-events-none absolute right-2.5 text-[11.5px] font-medium"
+                                    style={{ color: "rgba(255,255,255,0.4)" }}
+                                  >
+                                    {campo.unidade}
+                                  </span>
+                                )}
+                              </div>
+                              {campo.recomendado && (
+                                <span className="text-[9.5px]" style={{ color: "rgba(255,255,255,0.3)" }}>
+                                  Recomendado: {campo.recomendado}
                                 </span>
                               )}
-                            </div>
+                            </>
                           )}
                         </div>
                       ))}
@@ -2502,6 +2663,7 @@ function MaintenanceApp() {
   // Toda vez que troca o tipo de rotina (ou no carregamento inicial), busca o progresso salvo dessa rotina/dia
   const loadedKeyRef = useRef(null);
   const [loadError, setLoadError] = useState(null);
+  const [syncError, setSyncError] = useState(null);
   useEffect(() => {
     setLoaded(false);
     setLoadError(null);
@@ -2612,7 +2774,10 @@ function MaintenanceApp() {
           checked_items: s.checkedItems || [],
           valores: s.valores || {},
           comentario: s.comentario || "",
-        }).catch(() => {}); // falha silenciosa — dados já estão no localStorage
+        }).catch((e) => {
+          console.error("Falha ao sincronizar com Supabase:", e);
+          setSyncError(String(e && e.message ? e.message : e));
+        });
       }
       return novo;
     });
@@ -2934,6 +3099,20 @@ function MaintenanceApp() {
         {loadError && pagina === "checklist" && (
           <p className="mb-3 text-[11px] font-medium" style={{ color: "#F0997B" }}>
             ⚠ Não foi possível carregar o progresso ({loadError}).
+          </p>
+        )}
+
+        {pagina === "checklist" && usuario && !usuario.id && (
+          <div className="mb-3 rounded-xl px-3 py-2" style={{ background: "rgba(240,153,123,0.1)", border: "1px solid rgba(240,153,123,0.25)" }}>
+            <p className="text-[11.5px] font-medium" style={{ color: "#F0997B" }}>
+              ⚠ Seu progresso está salvo só neste celular — não aparecerá no Dashboard nem para outros usuários. Saia e entre novamente para sincronizar com a nuvem.
+            </p>
+          </div>
+        )}
+
+        {syncError && pagina === "checklist" && (
+          <p className="mb-3 text-[11px] font-medium" style={{ color: "#F0997B" }}>
+            ⚠ Falha ao sincronizar com o servidor ({syncError}). Seus dados estão salvos localmente.
           </p>
         )}
 
