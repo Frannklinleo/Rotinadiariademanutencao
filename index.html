@@ -144,6 +144,18 @@ async function supaGetUsuario(nome, sobrenome) {
   return rows && rows.length > 0 ? rows[0] : null;
 }
 
+// Verifica se um usuário ainda existe no banco pelo id (usado para detectar
+// sessões "órfãs" — quando o banco foi resetado mas o celular ainda guarda o id antigo)
+async function supaVerificarUsuarioExiste(id) {
+  if (!id) return false;
+  try {
+    const rows = await supaFetch(`/usuarios?id=eq.${id}&select=id&limit=1`);
+    return !!(rows && rows.length > 0);
+  } catch (_) {
+    return true; // erro de rede: não desloga por precaução, assume que existe
+  }
+}
+
 // Cria usuário novo, retorna o registro criado
 async function supaCreateUsuario(nome, sobrenome, senha) {
   const rows = await supaFetch("/usuarios", {
@@ -2559,6 +2571,21 @@ function MaintenanceApp() {
   const [usuario, setUsuario] = useState(() => {
     return JSON.parse(localStorage.getItem("usuario_sessao") || "null");
   });
+
+  // Detecta sessão "órfã": o usuario_id salvo no celular não existe mais no banco
+  // (ex: o banco foi resetado). Nesse caso, desloga automaticamente e pede novo login.
+  useEffect(() => {
+    if (!usuario || !usuario.id) return;
+    let cancelado = false;
+    supaVerificarUsuarioExiste(usuario.id).then((existe) => {
+      if (!existe && !cancelado) {
+        localStorage.removeItem("usuario_sessao");
+        setUsuario(null);
+      }
+    });
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const saudacao = useMemo(() => {
     const h = today.getHours();
