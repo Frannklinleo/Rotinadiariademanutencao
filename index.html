@@ -3231,17 +3231,16 @@ function MaintenanceApp() {
     setResumoIaErro(null);
     setResumoIaTexto(null);
     try {
-      const prompt = `Você vai receber o relatório bruto de uma rotina diária de manutenção industrial preenchida por um técnico (${usuario ? usuario.nome + " " + usuario.sobrenome : "colaborador"}). Transforme em um resumo corrido de 2 a 3 parágrafos curtos, para ser lido rapidamente no WhatsApp por um gestor.
+      const prompt = `Leia o relatório de manutenção abaixo e escreva um resumo em português, para ser lido no WhatsApp por um gestor. O técnico responsável foi ${usuario ? usuario.nome + " " + usuario.sobrenome : "um colaborador"}.
 
-Regras:
-- Destaque primeiro qualquer observação, comentário ou valor fora do esperado (ex: equipamento em manutenção, temperatura alta, vazamento, etc.)
-- Mencione rapidamente, em uma frase, que o restante das áreas foi verificado normalmente sem problemas — não liste item por item
-- Tom direto e profissional, como um resumo de status para um superior
-- Não use markdown, não use bullets, não use emojis
-- Não invente informações que não estão no relatório
-- Não repita números de progresso tipo "34/40" — fale em termos qualitativos
+O resumo deve ter 2 a 3 parágrafos corridos (sem títulos, sem bullets, sem markdown, sem emojis), cobrindo:
+1º parágrafo: cite rapidamente quais áreas/rotinas foram verificadas no geral.
+2º parágrafo: destaque especificamente qualquer observação, comentário ou valor fora do padrão que aparece no relatório (equipamento em manutenção, parado, temperatura ou pressão fora do esperado, vazamento, etc). Se não houver nada fora do padrão, diga isso claramente em uma frase.
+3º parágrafo (opcional): uma linha de fechamento breve sobre o estado geral da rotina.
 
-Relatório bruto:
+Sua resposta deve conter SOMENTE o texto final do resumo, pronto para ser copiado e colado — nada de comentários sobre como você seguiu as instruções, nada de listas de verificação, nada de texto entre asteriscos.
+
+Relatório:
 ${reportText}`;
 
       const response = await fetch(`${SUPA_URL}/functions/v1/resumo-ia`, {
@@ -3259,7 +3258,23 @@ ${reportText}`;
         throw new Error(data.error || `Erro na função (${response.status})`);
       }
       if (!data.texto) throw new Error("Resposta vazia da IA");
-      setResumoIaTexto(data.texto);
+
+      // Limpeza defensiva: remove qualquer resíduo de "raciocínio exposto"
+      // que o modelo às vezes devolve antes do texto final (linhas de checklist,
+      // markdown de lista, texto entre asteriscos usado como ênfase de regra).
+      const limpo = data.texto
+        .split("\n")
+        .filter((linha) => {
+          const l = linha.trim();
+          if (!l) return true; // mantém linhas em branco (separam parágrafos)
+          if (/^[\*\-•]/.test(l)) return false; // linha de lista/bullet
+          if (/^(NO|SIM|YES|OK)\b.*\?/i.test(l)) return false; // linha tipo "NO bullets? Yes."
+          return true;
+        })
+        .join("\n")
+        .trim();
+
+      setResumoIaTexto(limpo || data.texto.trim());
     } catch (e) {
       setResumoIaErro(e && e.message ? e.message : "Falha ao gerar resumo. Tente novamente.");
     }
