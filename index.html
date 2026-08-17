@@ -211,6 +211,15 @@ async function supaAtualizarSenha(userId, novaSenha) {
   });
 }
 
+// Atualiza nome/sobrenome de um usuário (uso administrativo)
+async function supaAtualizarDadosUsuario(userId, nome, sobrenome) {
+  return supaFetch(`/usuarios?id=eq.${userId}`, {
+    method: "PATCH",
+    headers: { "Prefer": "return=representation" },
+    body: JSON.stringify({ nome, sobrenome }),
+  });
+}
+
 // Upload de avatar para o Supabase Storage
 async function supaUploadAvatar(userId, file) {
   const ext = file.name.split(".").pop() || "jpg";
@@ -1275,10 +1284,131 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
 }
 
 // ----------------------------------------------------------------------------
+// MODAL: EDITAR USUÁRIO (uso administrativo)
+// ----------------------------------------------------------------------------
+
+function ModalEditarUsuario({ usuarioAlvo, onClose, onSalvo, tema }) {
+  const [nome, setNome] = useState(usuarioAlvo.nome);
+  const [sobrenome, setSobrenome] = useState(usuarioAlvo.sobrenome);
+  const [salvando, setSalvando] = useState(false);
+  const [enviandoFoto, setEnviandoFoto] = useState(false);
+  const [fotoUrl, setFotoUrl] = useState(usuarioAlvo.foto_url || null);
+  const [erro, setErro] = useState(null);
+  const fileRef = useRef(null);
+
+  async function handleFoto(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setEnviandoFoto(true);
+    setErro(null);
+    try {
+      const url = await supaUploadAvatar(usuarioAlvo.id, file);
+      await supaAtualizarFotoUrl(usuarioAlvo.id, url);
+      setFotoUrl(url);
+    } catch (err) {
+      setErro(`Erro ao enviar foto: ${err && err.message ? err.message : "tente novamente"}`);
+    }
+    setEnviandoFoto(false);
+    e.target.value = "";
+  }
+
+  async function handleSalvar() {
+    if (!nome.trim() || !sobrenome.trim()) { setErro("Nome e sobrenome não podem ficar vazios."); return; }
+    setSalvando(true);
+    setErro(null);
+    try {
+      await supaAtualizarDadosUsuario(usuarioAlvo.id, nome.trim(), sobrenome.trim());
+      onSalvo({ ...usuarioAlvo, nome: nome.trim(), sobrenome: sobrenome.trim(), foto_url: fotoUrl });
+    } catch (err) {
+      setErro(`Erro ao salvar: ${err && err.message ? err.message : "tente novamente"}`);
+      setSalvando(false);
+    }
+  }
+
+  const inputStyle = {
+    background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+    color: "white", outline: "none", borderRadius: "12px", padding: "10px 14px",
+    fontSize: "14px", width: "100%",
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-5"
+      style={{ background: "rgba(8,10,13,0.85)", backdropFilter: "blur(8px)" }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-3xl p-6"
+        style={{ background: "rgba(20,23,28,0.98)", border: "1px solid rgba(255,255,255,0.1)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-[16px] font-bold text-white">Editar usuário</h2>
+          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-xl" style={{ background: "rgba(255,255,255,0.06)" }}>
+            <X size={15} color="rgba(255,255,255,0.6)" />
+          </button>
+        </div>
+
+        {/* Foto */}
+        <div className="mb-5 flex flex-col items-center gap-2">
+          <div className="relative">
+            <div
+              className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl"
+              style={{ background: tema.accentSoft, border: `2px solid ${tema.accentBorder}` }}
+            >
+              {enviandoFoto
+                ? <span className="text-[11px]" style={{ color: tema.accent }}>...</span>
+                : fotoUrl
+                  ? <img src={fotoUrl} alt="" className="h-full w-full object-cover" />
+                  : <span className="text-[28px] font-bold" style={{ color: tema.accent }}>{nome[0] ? nome[0].toUpperCase() : "?"}</span>
+              }
+            </div>
+            <button
+              onClick={() => fileRef.current && fileRef.current.click()}
+              className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full"
+              style={{ background: tema.gradient, color: "#0E1116" }}
+            >
+              <Camera size={13} strokeWidth={2.5} />
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFoto} />
+          </div>
+        </div>
+
+        {/* Campos */}
+        <div className="mb-4 flex flex-col gap-3">
+          <div>
+            <label className="mb-1 block text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>Nome</label>
+            <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>Sobrenome</label>
+            <input type="text" value={sobrenome} onChange={(e) => setSobrenome(e.target.value)} style={inputStyle} />
+          </div>
+        </div>
+
+        {erro && (
+          <p className="mb-3 text-[12px]" style={{ color: "#F0997B" }}>{erro}</p>
+        )}
+
+        <button
+          onClick={handleSalvar}
+          disabled={salvando}
+          className="w-full rounded-2xl py-3 text-[14px] font-semibold"
+          style={{ background: tema.gradient, color: "#0E1116", opacity: salvando ? 0.6 : 1 }}
+        >
+          {salvando ? "Salvando..." : "Salvar alterações"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
 // TELA DASHBOARD
 // ----------------------------------------------------------------------------
 
-function TelaDashboard({ tema, today }) {
+function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
+  const ehAdmin = !!(usuario && usuario.role === "admin");
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(true);
   const [periodo, setPeriodo] = useState(7); // 7 ou 30 dias
@@ -1296,7 +1426,7 @@ function TelaDashboard({ tema, today }) {
       setCarregando(false);
     }
     carregar();
-  }, [periodo]);
+  }, [periodo, refreshKey]);
 
   if (carregando) {
     return (
@@ -1590,27 +1720,67 @@ function TelaDashboard({ tema, today }) {
       {/* Lista de usuários cadastrados */}
       <div style={cardStyle}>
         <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
-          Usuários cadastrados
+          Usuários cadastrados ({usuarios.length})
         </h3>
         <div className="flex flex-col gap-2">
           {usuarios.map((u) => {
             const meusReg = registros.filter((r) => r.usuario_id === u.id);
-            const diasU = new Set(meusReg.map((r) => r.data)).size;
+            const diasComRegistro = new Set(meusReg.map((r) => r.data));
+            const diasU = diasComRegistro.size;
+            const hoje = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+            const ativoHoje = diasComRegistro.has(hoje);
+
+            // Última atividade real (atualizado_em mais recente entre os registros do usuário)
+            const ultimaAtividade = meusReg.reduce((max, r) => {
+              const t = r.atualizado_em ? new Date(r.atualizado_em).getTime() : 0;
+              return t > max ? t : max;
+            }, 0);
+            const textoUltimaAtividade = ultimaAtividade
+              ? new Date(ultimaAtividade).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+              : "sem registros";
+
             return (
               <div key={u.id} className="flex items-center gap-3 rounded-2xl px-3 py-2.5" style={{ background: "rgba(255,255,255,0.04)" }}>
-                <div
-                  className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl text-[13px] font-bold"
-                  style={{ background: tema.accentSoft, color: tema.accent }}
-                >
-                  {u.foto_url
-                    ? <img src={u.foto_url} alt="" className="h-full w-full object-cover" />
-                    : u.nome[0].toUpperCase()
-                  }
+                <div className="relative shrink-0">
+                  <div
+                    className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl text-[13px] font-bold"
+                    style={{ background: tema.accentSoft, color: tema.accent }}
+                  >
+                    {u.foto_url
+                      ? <img src={u.foto_url} alt="" className="h-full w-full object-cover" />
+                      : u.nome[0].toUpperCase()
+                    }
+                  </div>
+                  {ativoHoje && (
+                    <span
+                      className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2"
+                      style={{ background: "#3DDC84", borderColor: "rgba(28,33,40,0.9)" }}
+                      title="Ativo hoje"
+                    />
+                  )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-white truncate">{u.nome} {u.sobrenome}</p>
-                  <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>{diasU} dia(s) com registro</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-medium text-white truncate">
+                    {u.nome} {u.sobrenome}
+                    {u.role === "admin" && (
+                      <span className="ml-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: tema.accentSoft, color: tema.accent }}>
+                        ADMIN
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>
+                    {diasU} dia(s) ativos · última vez: {textoUltimaAtividade}
+                  </p>
                 </div>
+                {ehAdmin && (
+                  <button
+                    onClick={() => onEditarUsuario(u)}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
+                    style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.5)" }}
+                  >
+                    <Settings2 size={14} />
+                  </button>
+                )}
               </div>
             );
           })}
@@ -1706,10 +1876,11 @@ function LoginModal({ onLogin }) {
 
       if (usuarioDb) {
         if (senha !== usuarioDb.senha) { setErro("Senha incorreta."); setSenha(""); setCarregando(false); return; }
+        const dadosUsuario = { id: usuarioDb.id, nome: usuarioDb.nome, sobrenome: usuarioDb.sobrenome, foto_url: usuarioDb.foto_url || null, role: usuarioDb.role || "user" };
         // Salva cache local para auto-login e offline
-        localStorage.setItem("usuario_rotina", JSON.stringify({ id: usuarioDb.id, nome: usuarioDb.nome, sobrenome: usuarioDb.sobrenome, senha }));
-        if (salvarSenha) localStorage.setItem("usuario_sessao", JSON.stringify({ id: usuarioDb.id, nome: usuarioDb.nome, sobrenome: usuarioDb.sobrenome }));
-        confirmar({ id: usuarioDb.id, nome: usuarioDb.nome, sobrenome: usuarioDb.sobrenome });
+        localStorage.setItem("usuario_rotina", JSON.stringify({ ...dadosUsuario, senha }));
+        if (salvarSenha) localStorage.setItem("usuario_sessao", JSON.stringify(dadosUsuario));
+        confirmar(dadosUsuario);
       } else {
         // Fallback offline
         const salvo = JSON.parse(localStorage.getItem("usuario_rotina") || "null");
@@ -1743,8 +1914,8 @@ function LoginModal({ onLogin }) {
       try { novoUsuario = await supaCreateUsuario(nome.trim(), sobrenome.trim(), senha); } catch (_) {}
 
       const dadosUsuario = novoUsuario
-        ? { id: novoUsuario.id, nome: novoUsuario.nome, sobrenome: novoUsuario.sobrenome }
-        : { id: null, nome: nome.trim(), sobrenome: sobrenome.trim() };
+        ? { id: novoUsuario.id, nome: novoUsuario.nome, sobrenome: novoUsuario.sobrenome, foto_url: novoUsuario.foto_url || null, role: novoUsuario.role || "user" }
+        : { id: null, nome: nome.trim(), sobrenome: sobrenome.trim(), foto_url: null, role: "user" };
 
       localStorage.setItem("usuario_rotina", JSON.stringify({ ...dadosUsuario, senha }));
       if (salvarSenha) localStorage.setItem("usuario_sessao", JSON.stringify(dadosUsuario));
@@ -2438,7 +2609,7 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
 // COMPONENTE: modal do relatório final
 // ----------------------------------------------------------------------------
 
-function ReportModal({ open, onClose, reportText, onSendWhatsapp, telefone, setTelefone }) {
+function ReportModal({ open, onClose, reportText, onSendWhatsapp, telefone, setTelefone, titulo = "Relatório da rotina", icone: Icone = FileText, corIcone = "#3DDC84" }) {
   const [copied, setCopied] = useState(false);
 
   if (!open) return null;
@@ -2475,11 +2646,11 @@ function ReportModal({ open, onClose, reportText, onSendWhatsapp, telefone, setT
           <div className="flex items-center gap-3">
             <div
               className="flex h-10 w-10 items-center justify-center rounded-xl"
-              style={{ background: "rgba(61,220,132,0.14)", color: "#3DDC84" }}
+              style={{ background: `${corIcone}24`, color: corIcone }}
             >
-              <FileText size={18} />
+              <Icone size={18} />
             </div>
-            <h2 className="text-[16px] font-semibold text-white">Relatório da rotina</h2>
+            <h2 className="text-[16px] font-semibold text-white">{titulo}</h2>
           </div>
           <button
             onClick={onClose}
@@ -2553,6 +2724,93 @@ function ReportModal({ open, onClose, reportText, onSendWhatsapp, telefone, setT
 }
 
 // ----------------------------------------------------------------------------
+// MODAL: RESUMO COM IA
+// ----------------------------------------------------------------------------
+
+function ResumoIaModal({ open, onClose, carregando, erro, texto, onTentarNovamente, telefone, setTelefone }) {
+  if (!open) return null;
+
+  // Enquanto carrega ou se deu erro, mostra um estado próprio (sem o corpo de texto do ReportModal)
+  if (carregando || erro || !texto) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+        style={{ background: "rgba(8,10,13,0.75)", backdropFilter: "blur(4px)" }}
+        onClick={onClose}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="relative flex w-full flex-col overflow-hidden rounded-t-3xl sm:max-w-lg sm:rounded-3xl"
+          style={{ background: "#181B21", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 -8px 40px rgba(0,0,0,0.5)" }}
+        >
+          <div className="flex items-center justify-between px-5 pb-4 pt-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: "rgba(45,212,191,0.14)", color: "#2DD4BF" }}>
+                <Zap size={18} />
+              </div>
+              <h2 className="text-[16px] font-semibold text-white">Resumo com IA</h2>
+            </div>
+            <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)" }}>
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="flex flex-col items-center gap-3 px-5 py-12 text-center">
+            {carregando && (
+              <>
+                <div
+                  className="h-8 w-8 rounded-full border-2 border-t-transparent animate-spin"
+                  style={{ borderColor: "rgba(45,212,191,0.25)", borderTopColor: "#2DD4BF" }}
+                />
+                <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.5)" }}>
+                  Analisando os dados da rotina...
+                </p>
+              </>
+            )}
+            {!carregando && erro && (
+              <>
+                <AlertTriangle size={28} color="#F0997B" />
+                <p className="text-[13px]" style={{ color: "#F0997B" }}>{erro}</p>
+                <button
+                  onClick={onTentarNovamente}
+                  className="mt-2 rounded-xl px-4 py-2 text-[13px] font-medium"
+                  style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.8)" }}
+                >
+                  Tentar novamente
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Texto pronto: reaproveita o ReportModal padrão (copiar + WhatsApp)
+  const encoded = encodeURIComponent(texto);
+  const enviarWhatsapp = () => {
+    const url = telefone
+      ? `https://wa.me/55${telefone.replace(/\D/g, "")}?text=${encoded}`
+      : `https://wa.me/?text=${encoded}`;
+    window.open(url, "_blank");
+  };
+
+  return (
+    <ReportModal
+      open={open}
+      onClose={onClose}
+      reportText={texto}
+      onSendWhatsapp={enviarWhatsapp}
+      telefone={telefone}
+      setTelefone={setTelefone}
+      titulo="Resumo com IA"
+      icone={Zap}
+      corIcone="#2DD4BF"
+    />
+  );
+}
+
+// ----------------------------------------------------------------------------
 // APP PRINCIPAL
 // ----------------------------------------------------------------------------
 
@@ -2568,6 +2826,8 @@ function MaintenanceApp() {
   // ── Navegação ─────────────────────────────────────────────────────────────
   const [pagina, setPagina] = useState("checklist"); // checklist | perfil | dashboard
   const [menuAberto, setMenuAberto] = useState(false);
+  const [usuarioEditando, setUsuarioEditando] = useState(null);
+  const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
   const [usuario, setUsuario] = useState(() => {
     return JSON.parse(localStorage.getItem("usuario_sessao") || "null");
   });
@@ -2624,6 +2884,10 @@ function MaintenanceApp() {
   const [status, setStatus] = useState(() => estadoInicial(AREAS));
   const [openAreaId, setOpenAreaId] = useState(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const [resumoIaOpen, setResumoIaOpen] = useState(false);
+  const [resumoIaTexto, setResumoIaTexto] = useState(null);
+  const [resumoIaCarregando, setResumoIaCarregando] = useState(false);
+  const [resumoIaErro, setResumoIaErro] = useState(null);
   const [photoReportOpen, setPhotoReportOpen] = useState(false);
   const [reportOntemOpen, setReportOntemOpen] = useState(false);
   const [reportTextOntem, setReportTextOntem] = useState(null);
@@ -2773,6 +3037,14 @@ function MaintenanceApp() {
   const loadedKeyRef = useRef(null);
   const [loadError, setLoadError] = useState(null);
   const [syncError, setSyncError] = useState(null);
+
+  // Erros de sincronização desaparecem sozinhos depois de um tempo — não devem
+  // ficar presos na tela permanentemente, mesmo que o usuário não faça mais nada.
+  useEffect(() => {
+    if (!syncError) return;
+    const t = setTimeout(() => setSyncError(null), 8000);
+    return () => clearTimeout(t);
+  }, [syncError]);
   useEffect(() => {
     setLoaded(false);
     setLoadError(null);
@@ -2883,6 +3155,8 @@ function MaintenanceApp() {
           checked_items: s.checkedItems || [],
           valores: s.valores || {},
           comentario: s.comentario || "",
+        }).then(() => {
+          setSyncError(null); // sucesso: limpa qualquer erro anterior exibido
         }).catch((e) => {
           console.error("Falha ao sincronizar com Supabase:", e);
           setSyncError(String(e && e.message ? e.message : e));
@@ -2948,6 +3222,49 @@ function MaintenanceApp() {
     linhas.push(`Fim do relatório — gerado em ${formatarDataCurta(today)}`);
     return linhas.join("\n");
   }, [status, today, totalChecked, AREAS, rotinaAtual, TOTAL_ITENS]);
+
+  // Envia o relatório bruto para a IA resumir em um texto curto, corrido,
+  // destacando o que fugiu do padrão e mencionando o resto de forma breve.
+  async function gerarResumoIA() {
+    setResumoIaOpen(true);
+    setResumoIaCarregando(true);
+    setResumoIaErro(null);
+    setResumoIaTexto(null);
+    try {
+      const prompt = `Você vai receber o relatório bruto de uma rotina diária de manutenção industrial preenchida por um técnico (${usuario ? usuario.nome + " " + usuario.sobrenome : "colaborador"}). Transforme em um resumo corrido de 2 a 3 parágrafos curtos, para ser lido rapidamente no WhatsApp por um gestor.
+
+Regras:
+- Destaque primeiro qualquer observação, comentário ou valor fora do esperado (ex: equipamento em manutenção, temperatura alta, vazamento, etc.)
+- Mencione rapidamente, em uma frase, que o restante das áreas foi verificado normalmente sem problemas — não liste item por item
+- Tom direto e profissional, como um resumo de status para um superior
+- Não use markdown, não use bullets, não use emojis
+- Não invente informações que não estão no relatório
+- Não repita números de progresso tipo "34/40" — fale em termos qualitativos
+
+Relatório bruto:
+${reportText}`;
+
+      const response = await fetch(`${SUPA_URL}/functions/v1/resumo-ia`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPA_KEY,
+          "Authorization": `Bearer ${SUPA_KEY}`,
+        },
+        body: JSON.stringify({ prompt }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || data.error) {
+        throw new Error(data.error || `Erro na função (${response.status})`);
+      }
+      if (!data.texto) throw new Error("Resposta vazia da IA");
+      setResumoIaTexto(data.texto);
+    } catch (e) {
+      setResumoIaErro(e && e.message ? e.message : "Falha ao gerar resumo. Tente novamente.");
+    }
+    setResumoIaCarregando(false);
+  }
 
   function abrirRelatorioFotos() {
     const areasComFoto = AREAS.filter((a) => (fotosPorArea[a.id] || []).length > 0);
@@ -3239,7 +3556,30 @@ function MaintenanceApp() {
           />
         )}
         {pagina === "dashboard" && (
-          <TelaDashboard tema={tema} today={today} />
+          <TelaDashboard
+            tema={tema}
+            today={today}
+            usuario={usuario}
+            onEditarUsuario={(u) => setUsuarioEditando(u)}
+            refreshKey={dashboardRefreshKey}
+          />
+        )}
+        {usuarioEditando && (
+          <ModalEditarUsuario
+            usuarioAlvo={usuarioEditando}
+            onClose={() => setUsuarioEditando(null)}
+            onSalvo={(atualizado) => {
+              setUsuarioEditando(null);
+              // Se o admin editou o próprio usuário, atualiza a sessão local também
+              if (usuario && usuario.id === atualizado.id) {
+                const novoUsuario = { ...usuario, nome: atualizado.nome, sobrenome: atualizado.sobrenome, foto_url: atualizado.foto_url };
+                localStorage.setItem("usuario_sessao", JSON.stringify(novoUsuario));
+                setUsuario(novoUsuario);
+              }
+              setDashboardRefreshKey((k) => k + 1);
+            }}
+            tema={tema}
+          />
         )}
         {pagina === "checklist" && (<>
           {/* Indicador de save + botão reiniciar */}
@@ -3333,6 +3673,20 @@ function MaintenanceApp() {
           </button>
         )}
 
+        {/* Botão "Resumo com IA" */}
+        <button
+          onClick={gerarResumoIA}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-[13px] font-medium shadow-lg transition-all active:scale-[0.98]"
+          style={{
+            background: "rgba(45,212,191,0.1)",
+            color: "#2DD4BF",
+            border: "1px solid rgba(45,212,191,0.3)",
+          }}
+        >
+          <Zap size={14} strokeWidth={2.3} />
+          Resumo com IA
+        </button>
+
         <div className="flex gap-2">
           <button
             onClick={() => setReportOpen(true)}
@@ -3406,6 +3760,18 @@ function MaintenanceApp() {
           setTelefone={setTelefone}
         />
       )}
+
+      {/* Modal resumo com IA */}
+      <ResumoIaModal
+        open={resumoIaOpen}
+        onClose={() => setResumoIaOpen(false)}
+        carregando={resumoIaCarregando}
+        erro={resumoIaErro}
+        texto={resumoIaTexto}
+        onTentarNovamente={gerarResumoIA}
+        telefone={telefone}
+        setTelefone={setTelefone}
+      />
 
       {resetConfirm && (
         <div
