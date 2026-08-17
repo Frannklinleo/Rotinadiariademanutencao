@@ -2727,7 +2727,7 @@ function ReportModal({ open, onClose, reportText, onSendWhatsapp, telefone, setT
 // MODAL: RESUMO COM IA
 // ----------------------------------------------------------------------------
 
-function ResumoIaModal({ open, onClose, carregando, erro, texto, onTentarNovamente, telefone, setTelefone }) {
+function ResumoIaModal({ open, onClose, carregando, erro, texto, onTentarNovamente, telefone, setTelefone, avisoTruncado }) {
   if (!open) return null;
 
   // Enquanto carrega ou se deu erro, mostra um estado próprio (sem o corpo de texto do ReportModal)
@@ -2796,17 +2796,30 @@ function ResumoIaModal({ open, onClose, carregando, erro, texto, onTentarNovamen
   };
 
   return (
-    <ReportModal
-      open={open}
-      onClose={onClose}
-      reportText={texto}
-      onSendWhatsapp={enviarWhatsapp}
-      telefone={telefone}
-      setTelefone={setTelefone}
-      titulo="Resumo com IA"
-      icone={Zap}
-      corIcone="#2DD4BF"
-    />
+    <>
+      {avisoTruncado && open && (
+        <div
+          className="fixed inset-x-0 z-[60] mx-auto flex max-w-lg items-center gap-2 rounded-2xl px-4 py-3"
+          style={{ top: "env(safe-area-inset-top, 12px)", left: 0, right: 0, marginTop: "12px", background: "rgba(240,153,123,0.95)", color: "#14171C" }}
+        >
+          <AlertTriangle size={16} />
+          <span className="text-[12.5px] font-medium">
+            O resumo pode ter sido cortado pela IA — revise antes de enviar.
+          </span>
+        </div>
+      )}
+      <ReportModal
+        open={open}
+        onClose={onClose}
+        reportText={texto}
+        onSendWhatsapp={enviarWhatsapp}
+        telefone={telefone}
+        setTelefone={setTelefone}
+        titulo="Resumo com IA"
+        icone={Zap}
+        corIcone="#2DD4BF"
+      />
+    </>
   );
 }
 
@@ -2888,6 +2901,7 @@ function MaintenanceApp() {
   const [resumoIaTexto, setResumoIaTexto] = useState(null);
   const [resumoIaCarregando, setResumoIaCarregando] = useState(false);
   const [resumoIaErro, setResumoIaErro] = useState(null);
+  const [resumoIaAvisoTruncado, setResumoIaAvisoTruncado] = useState(false);
   const [photoReportOpen, setPhotoReportOpen] = useState(false);
   const [reportOntemOpen, setReportOntemOpen] = useState(false);
   const [reportTextOntem, setReportTextOntem] = useState(null);
@@ -3230,6 +3244,7 @@ function MaintenanceApp() {
     setResumoIaCarregando(true);
     setResumoIaErro(null);
     setResumoIaTexto(null);
+    setResumoIaAvisoTruncado(false);
     try {
       const prompt = `Leia o relatório de manutenção abaixo e escreva um resumo em português, para ser lido no WhatsApp por um gestor. O técnico responsável foi ${usuario ? usuario.nome + " " + usuario.sobrenome : "um colaborador"}.
 
@@ -3275,6 +3290,9 @@ ${reportText}`;
         .trim();
 
       setResumoIaTexto(limpo || data.texto.trim());
+      if (data.truncado) {
+        setResumoIaAvisoTruncado(true);
+      }
     } catch (e) {
       setResumoIaErro(e && e.message ? e.message : "Falha ao gerar resumo. Tente novamente.");
     }
@@ -3786,6 +3804,7 @@ ${reportText}`;
         onTentarNovamente={gerarResumoIA}
         telefone={telefone}
         setTelefone={setTelefone}
+        avisoTruncado={resumoIaAvisoTruncado}
       />
 
       {resetConfirm && (
