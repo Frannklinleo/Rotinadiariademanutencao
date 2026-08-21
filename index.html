@@ -175,6 +175,31 @@ async function supaUpsertRegistro(registro) {
   });
 }
 
+// Registra uma anomalia confirmada pelo usuário (pop-up Sim/Não na observação da área)
+async function supaRegistrarAnomalia(anomalia) {
+  return supaFetch("/anomalias", {
+    method: "POST",
+    headers: { "Prefer": "return=representation" },
+    body: JSON.stringify(anomalia),
+  });
+}
+
+// Busca a contagem de anomalias de um usuário num período (para o Dashboard pessoal)
+async function supaGetAnomaliasUsuario(usuarioId, diasAtras = 30) {
+  const de = new Date();
+  de.setDate(de.getDate() - diasAtras);
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  return supaFetch(`/anomalias?usuario_id=eq.${usuarioId}&data=gte.${fmt(de)}&order=data.desc`);
+}
+
+// Busca todas as anomalias de todos os usuários num período (para o Dashboard geral)
+async function supaGetTodasAnomalias(diasAtras = 30) {
+  const de = new Date();
+  de.setDate(de.getDate() - diasAtras);
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  return supaFetch(`/anomalias?data=gte.${fmt(de)}&order=criado_em.desc`);
+}
+
 async function supaGetRegistrosDia(dataISO) {
   return supaFetch(`/registros_diarios?data=eq.${dataISO}&order=usuario_nome.asc,tipo_rotina.asc,area_id.asc`);
 }
@@ -253,13 +278,13 @@ async function supaUploadAvatar(userId, file) {
 const TEMAS = {
   mecanica: {
     label: "Mecânica",
-    accent: "#F5A623",
-    accentSoft: "rgba(245,166,35,0.12)",
-    accentSoft2: "rgba(245,166,35,0.08)",
-    accentBorder: "rgba(245,166,35,0.35)",
-    accentRgbLow: "rgba(245,166,35,0.15)",
-    gradient: "linear-gradient(135deg, #F5A623, #E0941A)",
-    glow: "rgba(245,166,35,0.35)",
+    accent: "#D97B29",
+    accentSoft: "rgba(217,123,41,0.12)",
+    accentSoft2: "rgba(217,123,41,0.08)",
+    accentBorder: "rgba(217,123,41,0.35)",
+    accentRgbLow: "rgba(217,123,41,0.15)",
+    gradient: "linear-gradient(135deg, #D97B29, #C2622B)",
+    glow: "rgba(217,123,41,0.35)",
   },
   eletrica: {
     label: "Elétrica",
@@ -280,6 +305,49 @@ const TEMAS = {
     accentRgbLow: "rgba(45,212,191,0.15)",
     gradient: "linear-gradient(135deg, #2DD4BF, #14B8A6)",
     glow: "rgba(45,212,191,0.35)",
+  },
+};
+
+// ----------------------------------------------------------------------------
+// PALETA — cores estruturais do app (fundo, texto, bordas, superfícies)
+// Independente do TEMAS acima, que cuida só da cor de destaque por rotina.
+// "claro" é o padrão profissional/clean; "escuro" é o visual anterior, preservado
+// como opção no Perfil.
+// ----------------------------------------------------------------------------
+const PALETA = {
+  claro: {
+    fundo: "#F7F7F5",           // gelo
+    fundoAlt: "#EFEFEC",        // gelo um pouco mais escuro (texturas sutis)
+    superficie: "#FFFFFF",      // branco (cards)
+    superficieAlt: "#F2F2EF",   // branco levemente acinzentado (inputs, hover)
+    borda: "rgba(23,23,23,0.10)",
+    bordaForte: "rgba(23,23,23,0.16)",
+    texto: "#171717",           // preto
+    textoSecundario: "rgba(23,23,23,0.62)",
+    textoTerciario: "rgba(23,23,23,0.40)",
+    textoInverso: "#FFFFFF",
+    overlay: "rgba(23,23,23,0.45)",
+    sucesso: "#1E9E5A",
+    sucessoSoft: "rgba(30,158,90,0.10)",
+    alerta: "#C2622B",
+    alertaSoft: "rgba(194,98,43,0.10)",
+  },
+  escuro: {
+    fundo: "#0E1116",
+    fundoAlt: "#12151A",
+    superficie: "rgba(28,33,40,0.9)",
+    superficieAlt: "rgba(255,255,255,0.04)",
+    borda: "rgba(255,255,255,0.07)",
+    bordaForte: "rgba(255,255,255,0.12)",
+    texto: "#FFFFFF",
+    textoSecundario: "rgba(255,255,255,0.6)",
+    textoTerciario: "rgba(255,255,255,0.4)",
+    textoInverso: "#0E1116",
+    overlay: "rgba(8,10,13,0.75)",
+    sucesso: "#3DDC84",
+    sucessoSoft: "rgba(61,220,132,0.10)",
+    alerta: "#F0997B",
+    alertaSoft: "rgba(240,153,123,0.10)",
   },
 };
 
@@ -342,6 +410,7 @@ const AREAS_MECANICA = [
       "Verificação geral nos queimadores quanto a vazamento de gás e funcionamento dos motores e estado de suas correias.",
       {
         label: "Queimador 1",
+        grupo: "Queimadores",
         campos: [
           { id: "queimador1_temp", label: "Temp", tipo: "number", unidade: "°C" },
           { id: "queimador1_setpoint", label: "Set point", tipo: "number", unidade: "°C" },
@@ -349,6 +418,7 @@ const AREAS_MECANICA = [
       },
       {
         label: "Queimador 2",
+        grupo: "Queimadores",
         campos: [
           { id: "queimador2_temp", label: "Temp", tipo: "number", unidade: "°C" },
           { id: "queimador2_setpoint", label: "Set point", tipo: "number", unidade: "°C" },
@@ -356,6 +426,7 @@ const AREAS_MECANICA = [
       },
       {
         label: "Queimador 3",
+        grupo: "Queimadores",
         campos: [
           { id: "queimador3_temp", label: "Temp", tipo: "number", unidade: "°C" },
           { id: "queimador3_setpoint", label: "Set point", tipo: "number", unidade: "°C" },
@@ -402,6 +473,7 @@ const AREAS_MECANICA = [
       "Funcionamento dos aparelhos de ar condicionado.",
       {
         label: "Vaporeira 1",
+        grupo: "Vaporeiras",
         campos: [
           { id: "vaporeira1_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "vaporeira1_pressao", label: "Pressão", tipo: "number", unidade: " Bar" },
@@ -409,6 +481,7 @@ const AREAS_MECANICA = [
       },
       {
         label: "Vaporeira 2",
+        grupo: "Vaporeiras",
         campos: [
           { id: "vaporeira2_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "vaporeira2_pressao", label: "Pressão", tipo: "number", unidade: " Bar" },
@@ -416,6 +489,7 @@ const AREAS_MECANICA = [
       },
       {
         label: "Vaporeira 3",
+        grupo: "Vaporeiras",
         campos: [
           { id: "vaporeira3_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "vaporeira3_pressao", label: "Pressão", tipo: "number", unidade: " Bar" },
@@ -423,6 +497,7 @@ const AREAS_MECANICA = [
       },
       {
         label: "Vaporeira 4",
+        grupo: "Vaporeiras",
         campos: [
           { id: "vaporeira4_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "vaporeira4_pressao", label: "Pressão", tipo: "number", unidade: " Bar" },
@@ -463,6 +538,7 @@ const AREAS_MECANICA = [
       "Verificar a existência de vazamentos nos maquinários.",
       {
         label: "Bomba de Vácuo 1",
+        grupo: "Bombas de Vácuo",
         campos: [
           { id: "bombavacuo1_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "bombavacuo1_horimetro", label: "Horímetro", tipo: "number", unidade: "h" },
@@ -470,6 +546,7 @@ const AREAS_MECANICA = [
       },
       {
         label: "Bomba de Vácuo 2",
+        grupo: "Bombas de Vácuo",
         campos: [
           { id: "bombavacuo2_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "bombavacuo2_horimetro", label: "Horímetro", tipo: "number", unidade: "h" },
@@ -477,6 +554,7 @@ const AREAS_MECANICA = [
       },
       {
         label: "Bomba de Vácuo 3",
+        grupo: "Bombas de Vácuo",
         campos: [
           { id: "bombavacuo3_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "bombavacuo3_horimetro", label: "Horímetro", tipo: "number", unidade: "h" },
@@ -484,6 +562,7 @@ const AREAS_MECANICA = [
       },
       {
         label: "Bomba de Vácuo 4",
+        grupo: "Bombas de Vácuo",
         campos: [
           { id: "bombavacuo4_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "bombavacuo4_horimetro", label: "Horímetro", tipo: "number", unidade: "h" },
@@ -491,6 +570,7 @@ const AREAS_MECANICA = [
       },
       {
         label: "Bomba de Vácuo 5",
+        grupo: "Bombas de Vácuo",
         campos: [
           { id: "bombavacuo5_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "bombavacuo5_horimetro", label: "Horímetro", tipo: "number", unidade: "h" },
@@ -498,6 +578,7 @@ const AREAS_MECANICA = [
       },
       {
         label: "Compressor Ingersoll",
+        grupo: "Compressores",
         campos: [
           { id: "compingersoll_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "compingersoll_horascarga", label: "Horas em carga", tipo: "number", unidade: "h" },
@@ -505,6 +586,7 @@ const AREAS_MECANICA = [
       },
       {
         label: "Compressor Konffiar (alugado)",
+        grupo: "Compressores",
         campos: [
           { id: "compkonffiar_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "compkonffiar_horascarga", label: "Horas em carga", tipo: "number", unidade: "h" },
@@ -512,6 +594,7 @@ const AREAS_MECANICA = [
       },
       {
         label: "Compressor ar respirável",
+        grupo: "Compressores",
         campos: [
           { id: "comparresp_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "comparresp_horascarga", label: "Horas em carga", tipo: "number", unidade: "h" },
@@ -519,12 +602,14 @@ const AREAS_MECANICA = [
       },
       {
         label: "Secador DPR 020",
+        grupo: "Secadores",
         campos: [
           { id: "secadordpr020_temp", label: "Temperatura", tipo: "number", unidade: "°C" },
         ],
       },
       {
         label: "Manômetro da linha",
+        grupo: "Manômetros",
         campos: [
           { id: "manometrolinha_pressao", label: "Pressão", tipo: "number", unidade: " Psi" },
         ],
@@ -601,6 +686,7 @@ const AREAS_ELETRICA = [
       "Verificação geral quanto ao funcionamento do sistema de chama, servomotor e existência de lâmpadas queimadas nos painéis elétricos.",
       {
         label: "Queimador 1",
+        grupo: "Queimadores",
         campos: [
           { id: "queimador1_temp", label: "Temp", tipo: "number", unidade: "°C" },
           { id: "queimador1_setpoint", label: "Set point", tipo: "number", unidade: "°C" },
@@ -608,6 +694,7 @@ const AREAS_ELETRICA = [
       },
       {
         label: "Queimador 2",
+        grupo: "Queimadores",
         campos: [
           { id: "queimador2_temp", label: "Temp", tipo: "number", unidade: "°C" },
           { id: "queimador2_setpoint", label: "Set point", tipo: "number", unidade: "°C" },
@@ -615,6 +702,7 @@ const AREAS_ELETRICA = [
       },
       {
         label: "Queimador 3",
+        grupo: "Queimadores",
         campos: [
           { id: "queimador3_temp", label: "Temp", tipo: "number", unidade: "°C" },
           { id: "queimador3_setpoint", label: "Set point", tipo: "number", unidade: "°C" },
@@ -639,6 +727,7 @@ const AREAS_ELETRICA = [
       "Funcionamento dos aparelhos de ar-condicionado e existência de lâmpadas queimadas nos painéis elétricos.",
       {
         label: "Vaporeira 1",
+        grupo: "Vaporeiras",
         campos: [
           { id: "vaporeira1_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "vaporeira1_pressao", label: "Pressão", tipo: "number", unidade: " Bar" },
@@ -646,6 +735,7 @@ const AREAS_ELETRICA = [
       },
       {
         label: "Vaporeira 2",
+        grupo: "Vaporeiras",
         campos: [
           { id: "vaporeira2_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "vaporeira2_pressao", label: "Pressão", tipo: "number", unidade: " Bar" },
@@ -653,6 +743,7 @@ const AREAS_ELETRICA = [
       },
       {
         label: "Vaporeira 3",
+        grupo: "Vaporeiras",
         campos: [
           { id: "vaporeira3_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "vaporeira3_pressao", label: "Pressão", tipo: "number", unidade: " Bar" },
@@ -660,6 +751,7 @@ const AREAS_ELETRICA = [
       },
       {
         label: "Vaporeira 4",
+        grupo: "Vaporeiras",
         campos: [
           { id: "vaporeira4_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "vaporeira4_pressao", label: "Pressão", tipo: "number", unidade: " Bar" },
@@ -678,6 +770,7 @@ const AREAS_ELETRICA = [
       "Verificar funcionamento das bombas de vácuo.",
       {
         label: "Bomba de Vácuo 1",
+        grupo: "Bombas de Vácuo",
         campos: [
           { id: "bombavacuo1_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "bombavacuo1_horimetro", label: "Horímetro", tipo: "number", unidade: "h" },
@@ -685,6 +778,7 @@ const AREAS_ELETRICA = [
       },
       {
         label: "Bomba de Vácuo 2",
+        grupo: "Bombas de Vácuo",
         campos: [
           { id: "bombavacuo2_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "bombavacuo2_horimetro", label: "Horímetro", tipo: "number", unidade: "h" },
@@ -692,6 +786,7 @@ const AREAS_ELETRICA = [
       },
       {
         label: "Bomba de Vácuo 3",
+        grupo: "Bombas de Vácuo",
         campos: [
           { id: "bombavacuo3_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "bombavacuo3_horimetro", label: "Horímetro", tipo: "number", unidade: "h" },
@@ -699,6 +794,7 @@ const AREAS_ELETRICA = [
       },
       {
         label: "Bomba de Vácuo 4",
+        grupo: "Bombas de Vácuo",
         campos: [
           { id: "bombavacuo4_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "bombavacuo4_horimetro", label: "Horímetro", tipo: "number", unidade: "h" },
@@ -706,6 +802,7 @@ const AREAS_ELETRICA = [
       },
       {
         label: "Bomba de Vácuo 5",
+        grupo: "Bombas de Vácuo",
         campos: [
           { id: "bombavacuo5_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "bombavacuo5_horimetro", label: "Horímetro", tipo: "number", unidade: "h" },
@@ -713,6 +810,7 @@ const AREAS_ELETRICA = [
       },
       {
         label: "Compressor Ingersoll",
+        grupo: "Compressores",
         campos: [
           { id: "compingersoll_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "compingersoll_horascarga", label: "Horas em carga", tipo: "number", unidade: "h" },
@@ -720,6 +818,7 @@ const AREAS_ELETRICA = [
       },
       {
         label: "Compressor Konffiar (alugado)",
+        grupo: "Compressores",
         campos: [
           { id: "compkonffiar_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "compkonffiar_horascarga", label: "Horas em carga", tipo: "number", unidade: "h" },
@@ -727,6 +826,7 @@ const AREAS_ELETRICA = [
       },
       {
         label: "Compressor ar respirável",
+        grupo: "Compressores",
         campos: [
           { id: "comparresp_status", label: "Status", tipo: "select", opcoes: ["Operando", "Parada", "Manutenção"] },
           { id: "comparresp_horascarga", label: "Horas em carga", tipo: "number", unidade: "h" },
@@ -734,12 +834,14 @@ const AREAS_ELETRICA = [
       },
       {
         label: "Secador DPR 020",
+        grupo: "Secadores",
         campos: [
           { id: "secadordpr020_temp", label: "Temperatura", tipo: "number", unidade: "°C" },
         ],
       },
       {
         label: "Manômetro da linha",
+        grupo: "Manômetros",
         campos: [
           { id: "manometrolinha_pressao", label: "Pressão", tipo: "number", unidade: " Psi" },
         ],
@@ -843,6 +945,7 @@ function estadoInicial(areas) {
       checkedItems: new Array(a.itens.length).fill(false),
       valores: {},
       comentario: "",
+      isAnomalia: null, // null = ainda não perguntado, true/false = resposta do usuário
       savedAt: null,
     };
   });
@@ -865,6 +968,7 @@ function sanitizarStatus(raw, areas) {
       checkedItems,
       valores: { ...valoresSalvos },
       comentario: typeof salvo.comentario === "string" ? salvo.comentario : "",
+      isAnomalia: typeof salvo.isAnomalia === "boolean" ? salvo.isAnomalia : null,
       savedAt: typeof salvo.savedAt === "number" ? salvo.savedAt : null,
     };
   });
@@ -1052,22 +1156,34 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
   const [metricas, setMetricas] = useState(null);
   const fileRef = useRef(null);
 
-  // Busca métricas pessoais do usuário
+  // Busca métricas pessoais do usuário (incluindo anomalias registradas)
   useEffect(() => {
-    if (!usuario && usuario.id) return;
+    if (!usuario || !usuario.id) return;
     async function carregar() {
       try {
         const dados = await supaGetHistorico(30);
-        if (!dados) return;
-        const meus = dados.filter((r) => r.usuario_id === usuario.id);
+        const meus = (dados || []).filter((r) => r.usuario_id === usuario.id);
         const diasSet = new Set(meus.map((r) => r.data));
         const totalCheck = meus.reduce((a, r) => a + (r.checked_items ? r.checked_items.filter(Boolean).length : 0), 0);
         const totalItens = meus.reduce((a, r) => a + (r.checked_items ? r.checked_items.length : 0), 0);
+
+        let anomalias7 = 0, anomalias30 = 0;
+        try {
+          const minhasAnomalias = await supaGetAnomaliasUsuario(usuario.id, 30);
+          const seteDiasAtras = new Date();
+          seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
+          const seteDiasISO = `${seteDiasAtras.getFullYear()}-${String(seteDiasAtras.getMonth()+1).padStart(2,"0")}-${String(seteDiasAtras.getDate()).padStart(2,"0")}`;
+          anomalias30 = (minhasAnomalias || []).length;
+          anomalias7 = (minhasAnomalias || []).filter((a) => a.data >= seteDiasISO).length;
+        } catch (_) {}
+
         setMetricas({
           diasAtivos: diasSet.size,
           totalCheck,
           totalItens,
           percentual: totalItens ? Math.round((totalCheck / totalItens) * 100) : 0,
+          anomalias7,
+          anomalias30,
         });
       } catch (_) {}
     }
@@ -1201,6 +1317,36 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
                 style={{ background: "rgba(255,255,255,0.04)" }}
               >
                 <span className="text-[22px] font-bold" style={{ color: tema.accent }}>{valor}</span>
+                <span className="text-center text-[10px] leading-tight" style={{ color: "rgba(255,255,255,0.4)" }}>{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Anomalias identificadas — indicador de atenção durante inspeções, não um ranking */}
+      {metricas && (
+        <div
+          className="rounded-3xl p-5"
+          style={{ background: "rgba(28,33,40,0.9)", border: "1px solid rgba(255,255,255,0.07)" }}
+        >
+          <h3 className="mb-1 text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+            Anomalias identificadas
+          </h3>
+          <p className="mb-4 text-[11.5px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+            Observações confirmadas como anomalia durante suas inspeções
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: "Últimos 7 dias", valor: metricas.anomalias7 },
+              { label: "Últimos 30 dias", valor: metricas.anomalias30 },
+            ].map(({ label, valor }) => (
+              <div
+                key={label}
+                className="flex flex-col items-center gap-1 rounded-2xl py-3"
+                style={{ background: "rgba(240,153,123,0.08)" }}
+              >
+                <span className="text-[22px] font-bold" style={{ color: "#F0997B" }}>{valor}</span>
                 <span className="text-center text-[10px] leading-tight" style={{ color: "rgba(255,255,255,0.4)" }}>{label}</span>
               </div>
             ))}
@@ -1419,9 +1565,10 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
       try {
         const registros = await supaGetHistorico(periodo);
         const usuarios = await supaGetTodosUsuarios();
-        setDados({ registros: registros || [], usuarios: usuarios || [] });
+        const anomalias = await supaGetTodasAnomalias(periodo);
+        setDados({ registros: registros || [], usuarios: usuarios || [], anomalias: anomalias || [] });
       } catch (_) {
-        setDados({ registros: [], usuarios: [] });
+        setDados({ registros: [], usuarios: [], anomalias: [] });
       }
       setCarregando(false);
     }
@@ -1436,7 +1583,7 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
     );
   }
 
-  const { registros, usuarios } = dados;
+  const { registros, usuarios, anomalias } = dados;
 
   // ── Métricas gerais ──────────────────────────────────────────────────────
   const totalChecked = registros.reduce((a, r) => a + (r.checked_items ? r.checked_items.filter(Boolean).length : 0), 0);
@@ -1494,6 +1641,19 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
   const corStatus = (s) => s === "Operando" ? "#3DDC84" : s === "Manutenção" ? "#F0997B" : "rgba(255,255,255,0.3)";
   const labelRotina = (r) => r === "mecanica" ? "Mecânica" : r === "eletrica" ? "Elétrica" : "Start up";
   const corRotina   = (r) => r === "mecanica" ? "#F5A623" : r === "eletrica" ? "#3B82F6" : "#2DD4BF";
+
+  // ── Anomalias agregadas ──────────────────────────────────────────────────
+  const anomaliasPorArea = {};
+  (anomalias || []).forEach((a) => {
+    const chave = a.area_nome;
+    anomaliasPorArea[chave] = (anomaliasPorArea[chave] || 0) + 1;
+  });
+  const rankingAreas = Object.entries(anomaliasPorArea)
+    .map(([area, count]) => ({ area, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+
+  const anomaliasRecentes = (anomalias || []).slice(0, 10);
 
   // ── Ranking de usuários (por itens concluídos no período selecionado) ────
   const porUsuarioPeriodo = {};
@@ -1673,6 +1833,63 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Anomalias — visão agregada de todos os usuários */}
+      <div style={cardStyle}>
+        <h3 className="mb-1 text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+          ⚠ Anomalias — {periodo === 7 ? "últimos 7 dias" : "últimos 30 dias"}
+        </h3>
+        <p className="mb-4 text-[11.5px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+          {(anomalias || []).length} ocorrência(s) confirmadas pela equipe
+        </p>
+
+        {rankingAreas.length > 0 && (
+          <div className="mb-4">
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.35)" }}>
+              Por área
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {rankingAreas.map(({ area, count }) => (
+                <div key={area} className="flex items-center gap-2">
+                  <span className="w-32 shrink-0 truncate text-[12px]" style={{ color: "rgba(255,255,255,0.7)" }}>{area}</span>
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${(count / rankingAreas[0].count) * 100}%`, background: "#F0997B" }}
+                    />
+                  </div>
+                  <span className="w-5 shrink-0 text-right text-[12px] font-semibold" style={{ color: "#F0997B" }}>{count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {anomaliasRecentes.length > 0 ? (
+          <div>
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.35)" }}>
+              Mais recentes
+            </p>
+            <div className="flex flex-col gap-2">
+              {anomaliasRecentes.map((a) => (
+                <div key={a.id} className="rounded-xl p-2.5" style={{ background: "rgba(240,153,123,0.06)", border: "1px solid rgba(240,153,123,0.15)" }}>
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-[11.5px] font-medium" style={{ color: "#F0997B" }}>{a.area_nome}</span>
+                    <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                      {a.usuario_nome} · {formatarDataCurta(new Date(a.data + "T00:00:00"))}
+                    </span>
+                  </div>
+                  {a.observacao && (
+                    <p className="text-[12px] leading-snug" style={{ color: "rgba(255,255,255,0.6)" }}>{a.observacao}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.3)" }}>Nenhuma anomalia registrada no período.</p>
+        )}
       </div>
 
       {/* Ranking de usuários */}
@@ -2120,7 +2337,7 @@ function LoginModal({ onLogin }) {
   );
 }
 
-function AreaCard({ area, status, onOpen, tema, fotoCount = 0 }) {
+function AreaCard({ area, status, onOpen, tema, p, fotoCount = 0 }) {
   const Icon = area.icon;
   const total = area.itens.length;
   const safeStatus = status || { checkedItems: [], valores: {}, comentario: "", savedAt: null };
@@ -2128,83 +2345,237 @@ function AreaCard({ area, status, onOpen, tema, fotoCount = 0 }) {
   const isDone = safeStatus.savedAt != null;
   const hasComment = safeStatus.comentario && safeStatus.comentario.trim().length > 0;
   const progress = total > 0 ? checked / total : 0;
+  const ehClaro = p === PALETA.claro;
+  const corDestaque = isDone ? p.sucesso : tema.accent;
 
   return (
     <button
       onClick={() => onOpen(area.id)}
-      className="group relative flex flex-col gap-3 rounded-2xl p-4 text-left transition-all duration-200 active:scale-[0.97]"
+      className="group relative flex flex-col overflow-hidden rounded-xl text-left transition-all duration-150 active:scale-[0.98]"
       style={{
-        background: isDone
-          ? "linear-gradient(160deg, rgba(61,220,132,0.10), rgba(28,33,40,0.9))"
-          : "rgba(28,33,40,0.9)",
-        border: isDone ? "1px solid rgba(61,220,132,0.35)" : "1px solid rgba(255,255,255,0.07)",
+        background: p.superficie,
+        border: `1px solid ${isDone ? p.sucesso + "50" : p.borda}`,
+        boxShadow: ehClaro ? "0 1px 3px rgba(23,23,23,0.06), 0 1px 2px rgba(23,23,23,0.04)" : "none",
       }}
     >
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-2.5">
-          <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-            style={{
-              background: isDone ? "rgba(61,220,132,0.14)" : tema.accentSoft,
-              color: isDone ? "#3DDC84" : tema.accent,
-            }}
-          >
-            <Icon size={18} strokeWidth={2} />
-          </div>
-          <div>
-            <div
-              className="font-mono text-[11px] font-medium tracking-wider"
-              style={{ color: "rgba(255,255,255,0.38)" }}
-            >
-              ÁREA {area.id}
-            </div>
-          </div>
+      <div className="flex items-center gap-2.5 px-3 pt-3">
+        <div
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+          style={{ background: isDone ? p.sucessoSoft : tema.accentSoft, color: corDestaque }}
+        >
+          <Icon size={16} strokeWidth={2} />
         </div>
-        <ProgressRing
-          progress={progress}
-          size={36}
-          stroke={3}
-          color={isDone ? "#3DDC84" : tema.accent}
-        />
+        <h3 className="min-w-0 flex-1 truncate text-[13.5px] font-semibold leading-tight" style={{ color: p.texto }}>
+          {area.nome}
+        </h3>
+        {isDone && (
+          <span className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full" style={{ background: p.sucesso }}>
+            <Check size={10} strokeWidth={3.5} color="#FFFFFF" />
+          </span>
+        )}
       </div>
 
-      <h3 className="text-[15px] font-semibold leading-snug text-white">{area.nome}</h3>
-
-      <div className="mt-auto flex items-center justify-between pt-1">
-        <span className="text-[12px] font-medium" style={{ color: "rgba(255,255,255,0.45)" }}>
-          {checked}/{total} itens
+      <div className="flex items-center justify-between gap-2 px-3 pb-2.5 pt-2">
+        <span className="text-[11.5px] font-medium tabular-nums" style={{ color: p.textoSecundario }}>
+          {checked}/{total}
         </span>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           {fotoCount > 0 && (
-            <span
-              className="flex h-5 items-center gap-0.5 rounded-full px-1.5"
-              style={{ background: tema.accentRgbLow, color: tema.accent }}
-              title="Possui fotos"
-            >
-              <ImageIcon size={11} strokeWidth={2.3} />
-              <span className="text-[10px] font-semibold">{fotoCount}</span>
+            <span className="flex items-center gap-0.5" style={{ color: p.textoTerciario }} title="Possui fotos">
+              <ImageIcon size={11} strokeWidth={2} />
+              <span className="text-[10px] font-medium">{fotoCount}</span>
             </span>
           )}
           {hasComment && (
-            <span
-              className="flex h-5 w-5 items-center justify-center rounded-full"
-              style={{ background: tema.accentRgbLow, color: tema.accent }}
-              title="Possui observações"
-            >
-              <MessageSquarePlus size={11} strokeWidth={2.3} />
-            </span>
-          )}
-          {isDone && (
-            <span
-              className="flex h-5 w-5 items-center justify-center rounded-full"
-              style={{ background: "rgba(61,220,132,0.18)", color: "#3DDC84" }}
-            >
-              <Check size={12} strokeWidth={3} />
-            </span>
+            <MessageSquarePlus size={12} strokeWidth={2} style={{ color: p.textoTerciario }} />
           )}
         </div>
       </div>
+
+      {/* Barra de progresso linear fina, na base do card */}
+      <div className="h-[3px] w-full" style={{ background: ehClaro ? "rgba(23,23,23,0.06)" : "rgba(255,255,255,0.06)" }}>
+        <div className="h-full transition-all duration-300" style={{ width: `${progress * 100}%`, background: corDestaque }} />
+      </div>
     </button>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// COMPONENTE: card de um único equipamento estruturado (ex: Skid de TDI)
+// ----------------------------------------------------------------------------
+
+function CardEquipamento({ item, valores, onChangeValor, completo }) {
+  return (
+    <div
+      className="mb-3 flex flex-col gap-2.5 rounded-xl p-3.5"
+      style={{
+        background: completo ? "rgba(61,220,132,0.08)" : "rgba(255,255,255,0.03)",
+        border: completo ? "1px solid rgba(61,220,132,0.25)" : "1px solid rgba(255,255,255,0.05)",
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md"
+          style={{
+            background: completo ? "#3DDC84" : "transparent",
+            border: completo ? "none" : "1.5px solid rgba(255,255,255,0.25)",
+          }}
+        >
+          {completo && <Check size={13} strokeWidth={3} color="#0E1116" />}
+        </span>
+        <span className="text-[13.5px] font-medium leading-snug text-white">{item.label}</span>
+      </div>
+      <div className="flex flex-wrap gap-2 pl-7">
+        {item.campos.map((campo) => (
+          <CampoInput key={campo.id} campo={campo} valor={valores[campo.id]} onChange={(v) => onChangeValor(campo.id, v)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// COMPONENTE: campo de input reutilizável (select de status ou número)
+// ----------------------------------------------------------------------------
+
+function CampoInput({ campo, valor, onChange }) {
+  return (
+    <div className="flex flex-1 flex-col gap-1" style={{ minWidth: "120px" }}>
+      <label className="text-[10.5px] font-medium uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>
+        {campo.label}
+      </label>
+      {campo.tipo === "select" ? (
+        <select
+          value={valor || ""}
+          onChange={(e) => onChange(e.target.value)}
+          className="rounded-lg px-2.5 py-2 text-[13px] outline-none"
+          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "white" }}
+        >
+          <option value="" disabled>Selecionar...</option>
+          {campo.opcoes.map((op) => (
+            <option key={op} value={op} style={{ color: "#14171C" }}>{op}</option>
+          ))}
+        </select>
+      ) : (
+        <>
+          <div className="relative flex items-center">
+            <input
+              type="number"
+              inputMode="decimal"
+              value={valor || ""}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder="0"
+              className="w-full rounded-lg px-2.5 py-2 pr-9 text-[13px] outline-none"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                border: campo.recomendado && valor && parseFloat(valor) >= 40
+                  ? "1px solid rgba(240,153,123,0.5)"
+                  : "1px solid rgba(255,255,255,0.12)",
+                color: "white",
+              }}
+            />
+            {campo.unidade && (
+              <span className="pointer-events-none absolute right-2.5 text-[11.5px] font-medium" style={{ color: "rgba(255,255,255,0.4)" }}>
+                {campo.unidade}
+              </span>
+            )}
+          </div>
+          {campo.recomendado && (
+            <span className="text-[9.5px]" style={{ color: "rgba(255,255,255,0.3)" }}>Recomendado: {campo.recomendado}</span>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// COMPONENTE: sub-card colapsável para grupo de equipamentos (Bombas, Compressores...)
+// ----------------------------------------------------------------------------
+
+function SubCardGrupo({ grupo, itensDoGrupo, status, valores, area, onChangeValor, tema }) {
+  const [aberto, setAberto] = useState(false);
+
+  const totalGrupo = itensDoGrupo.length;
+  const completosGrupo = itensDoGrupo.filter(({ item, idx }) => itemEstaCompleto(item, idx, status)).length;
+  const tudoCompleto = completosGrupo === totalGrupo;
+
+  // Resumo de status (Operando/Parada/Manutenção) quando os itens do grupo usam esse padrão
+  const resumoStatus = {};
+  itensDoGrupo.forEach(({ item }) => {
+    const campoStatus = item.campos.find((c) => c.tipo === "select");
+    if (campoStatus) {
+      const v = valores[campoStatus.id];
+      if (v) resumoStatus[v] = (resumoStatus[v] || 0) + 1;
+    }
+  });
+
+  const corStatus = (s) => s === "Operando" ? "#3DDC84" : s === "Manutenção" ? "#F0997B" : "rgba(255,255,255,0.4)";
+
+  return (
+    <div
+      className="mb-3 overflow-hidden rounded-xl"
+      style={{
+        background: tudoCompleto ? "rgba(61,220,132,0.06)" : "rgba(255,255,255,0.03)",
+        border: tudoCompleto ? "1px solid rgba(61,220,132,0.2)" : "1px solid rgba(255,255,255,0.06)",
+      }}
+    >
+      <button onClick={() => setAberto(!aberto)} className="flex w-full items-center justify-between gap-3 p-3.5 text-left">
+        <div className="flex items-center gap-2.5">
+          <span
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md"
+            style={{ background: tudoCompleto ? "#3DDC84" : "transparent", border: tudoCompleto ? "none" : "1.5px solid rgba(255,255,255,0.25)" }}
+          >
+            {tudoCompleto && <Check size={13} strokeWidth={3} color="#0E1116" />}
+          </span>
+          <div>
+            <p className="text-[13.5px] font-medium text-white">{grupo}</p>
+            <div className="mt-0.5 flex items-center gap-2">
+              <span className="text-[11.5px]" style={{ color: "rgba(255,255,255,0.4)" }}>
+                {completosGrupo}/{totalGrupo} preenchidos
+              </span>
+              {Object.entries(resumoStatus).map(([s, n]) => (
+                <span key={s} className="flex items-center gap-1 text-[10.5px]" style={{ color: corStatus(s) }}>
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: corStatus(s) }} />
+                  {n} {s.toLowerCase()}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+        <ChevronLeft size={16} color="rgba(255,255,255,0.4)" style={{ transform: aberto ? "rotate(90deg)" : "rotate(-90deg)", transition: "transform 0.2s" }} />
+      </button>
+
+      {aberto && (
+        <div className="flex flex-col gap-2 px-3.5 pb-3.5">
+          {itensDoGrupo.map(({ item, idx }) => {
+            const completo = itemEstaCompleto(item, idx, status);
+            return (
+              <div
+                key={idx}
+                className="flex flex-col gap-2 rounded-lg p-2.5"
+                style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)" }}
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded"
+                    style={{ background: completo ? "#3DDC84" : "transparent", border: completo ? "none" : "1.5px solid rgba(255,255,255,0.25)" }}
+                  >
+                    {completo && <Check size={10} strokeWidth={3} color="#0E1116" />}
+                  </span>
+                  <span className="text-[12.5px] font-medium text-white">{item.label}</span>
+                </div>
+                <div className="flex flex-wrap gap-2 pl-6">
+                  {item.campos.map((campo) => (
+                    <CampoInput key={campo.id} campo={campo} valor={valores[campo.id]} onChange={(v) => onChangeValor(area.id, campo.id, v)} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -2212,10 +2583,11 @@ function AreaCard({ area, status, onOpen, tema, fotoCount = 0 }) {
 // COMPONENTE: modal de detalhe da área
 // ----------------------------------------------------------------------------
 
-function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChangeComentario, onSave, tema, fotos, onAddFotos, onRemoveFoto }) {
+function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChangeComentario, onSetAnomalia, onSave, tema, fotos, onAddFotos, onRemoveFoto }) {
   const [showComment, setShowComment] = useState(
     status.comentario && status.comentario.trim().length > 0
   );
+  const [perguntaAnomaliaAberta, setPerguntaAnomaliaAberta] = useState(false);
   const [justFinished, setJustFinished] = useState(false);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -2241,6 +2613,34 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
   const total = area.itens.length;
   const checked = area.itens.filter((item, idx) => itemEstaCompleto(item, idx, status)).length;
 
+  // Classifica os itens da área em três grupos para a nova experiência:
+  // 1) texto simples (checklist rotineiro) -> vira 1 clique só
+  // 2) estruturado sem "grupo" (equipamento único, ex: Skid de TDI) -> card avulso
+  // 3) estruturado com "grupo" (Bombas de Vácuo, Compressores etc.) -> sub-card colapsável
+  const itensSimples = [];
+  const itensSemGrupo = [];
+  const itensPorGrupo = {};
+  area.itens.forEach((item, idx) => {
+    if (typeof item === "string") {
+      itensSimples.push({ texto: item, idx });
+    } else if (item.grupo) {
+      if (!itensPorGrupo[item.grupo]) itensPorGrupo[item.grupo] = [];
+      itensPorGrupo[item.grupo].push({ item, idx });
+    } else {
+      itensSemGrupo.push({ item, idx });
+    }
+  });
+
+  const todosSimplesConcluidos = itensSimples.length > 0 && itensSimples.every(({ idx }) => !!status.checkedItems[idx]);
+
+  const handleToggleTodosSimples = () => {
+    const novoValor = !todosSimplesConcluidos;
+    itensSimples.forEach(({ idx }) => {
+      const jaMarcado = !!status.checkedItems[idx];
+      if (jaMarcado !== novoValor) onToggleItem(area.id, idx);
+    });
+  };
+
   const handleFinish = () => {
     onSave(area.id);
     setJustFinished(true);
@@ -2256,7 +2656,7 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
       style={{ background: "rgba(8,10,13,0.72)", backdropFilter: "blur(4px)" }}
     >
       <div
-        className="flex flex-col overflow-hidden rounded-3xl"
+        className="relative flex flex-col overflow-hidden rounded-3xl"
         style={{
           background: "#181B21",
           border: "1px solid rgba(255,255,255,0.08)",
@@ -2325,137 +2725,64 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
             </span>
           </div>
 
-          <div className="flex flex-col gap-2">
-            {area.itens.map((item, idx) => {
-              if (typeof item !== "string") {
-                // Item estruturado: ex. Queimador 1 (Temp + Set point), Bomba de Vácuo 1 (Status + Horímetro)
-                const completo = itemEstaCompleto(item, idx, status);
-                return (
-                  <div
-                    key={idx}
-                    className="flex flex-col gap-2.5 rounded-xl p-3"
-                    style={{
-                      background: completo ? "rgba(61,220,132,0.08)" : "rgba(255,255,255,0.03)",
-                      border: completo ? "1px solid rgba(61,220,132,0.25)" : "1px solid rgba(255,255,255,0.05)",
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md"
-                        style={{
-                          background: completo ? "#3DDC84" : "transparent",
-                          border: completo ? "none" : "1.5px solid rgba(255,255,255,0.25)",
-                        }}
-                      >
-                        {completo && <Check size={13} strokeWidth={3} color="#0E1116" />}
-                      </span>
-                      <span className="text-[13.5px] font-medium leading-snug text-white">
-                        {item.label}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-2 pl-7">
-                      {item.campos.map((campo) => (
-                        <div key={campo.id} className="flex flex-1 flex-col gap-1" style={{ minWidth: "120px" }}>
-                          <label
-                            className="text-[10.5px] font-medium uppercase tracking-wide"
-                            style={{ color: "rgba(255,255,255,0.4)" }}
-                          >
-                            {campo.label}
-                          </label>
-                          {campo.tipo === "select" ? (
-                            <select
-                              value={valores[campo.id] || ""}
-                              onChange={(e) => onChangeValor(area.id, campo.id, e.target.value)}
-                              className="rounded-lg px-2.5 py-2 text-[13px] outline-none"
-                              style={{
-                                background: "rgba(255,255,255,0.06)",
-                                border: "1px solid rgba(255,255,255,0.12)",
-                                color: "white",
-                              }}
-                            >
-                              <option value="" disabled>
-                                Selecionar...
-                              </option>
-                              {campo.opcoes.map((op) => (
-                                <option key={op} value={op} style={{ color: "#14171C" }}>
-                                  {op}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <>
-                              <div className="relative flex items-center">
-                                <input
-                                  type="number"
-                                  inputMode="decimal"
-                                  value={valores[campo.id] || ""}
-                                  onChange={(e) => onChangeValor(area.id, campo.id, e.target.value)}
-                                  placeholder="0"
-                                  className="w-full rounded-lg px-2.5 py-2 pr-9 text-[13px] outline-none"
-                                  style={{
-                                    background: "rgba(255,255,255,0.06)",
-                                    border: campo.recomendado && valores[campo.id] && parseFloat(valores[campo.id]) >= 40
-                                      ? "1px solid rgba(240,153,123,0.5)"
-                                      : "1px solid rgba(255,255,255,0.12)",
-                                    color: "white",
-                                  }}
-                                />
-                                {campo.unidade && (
-                                  <span
-                                    className="pointer-events-none absolute right-2.5 text-[11.5px] font-medium"
-                                    style={{ color: "rgba(255,255,255,0.4)" }}
-                                  >
-                                    {campo.unidade}
-                                  </span>
-                                )}
-                              </div>
-                              {campo.recomendado && (
-                                <span className="text-[9.5px]" style={{ color: "rgba(255,255,255,0.3)" }}>
-                                  Recomendado: {campo.recomendado}
-                                </span>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              }
-
-              const isChecked = !!status.checkedItems[idx];
-              return (
-                <button
-                  key={idx}
-                  onClick={() => onToggleItem(area.id, idx)}
-                  className="flex w-full items-start gap-3 rounded-xl p-3 text-left transition-colors"
-                  style={{
-                    background: isChecked ? "rgba(61,220,132,0.08)" : "rgba(255,255,255,0.03)",
-                    border: isChecked ? "1px solid rgba(61,220,132,0.25)" : "1px solid rgba(255,255,255,0.05)",
-                  }}
+          {/* Itens de texto simples (checklist rotineiro): 1 clique marca tudo de uma vez */}
+          {itensSimples.length > 0 && (
+            <button
+              onClick={handleToggleTodosSimples}
+              className="mb-3 flex w-full items-start gap-3 rounded-xl p-3.5 text-left transition-colors"
+              style={{
+                background: todosSimplesConcluidos ? "rgba(61,220,132,0.08)" : "rgba(255,255,255,0.03)",
+                border: todosSimplesConcluidos ? "1px solid rgba(61,220,132,0.25)" : "1px solid rgba(255,255,255,0.05)",
+              }}
+            >
+              <span
+                className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md transition-colors"
+                style={{
+                  background: todosSimplesConcluidos ? "#3DDC84" : "transparent",
+                  border: todosSimplesConcluidos ? "none" : "1.5px solid rgba(255,255,255,0.25)",
+                }}
+              >
+                {todosSimplesConcluidos && <Check size={13} strokeWidth={3} color="#0E1116" />}
+              </span>
+              <div className="flex-1">
+                <p
+                  className="text-[13.5px] font-medium leading-snug"
+                  style={{ color: todosSimplesConcluidos ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.9)" }}
                 >
-                  <span
-                    className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md transition-colors"
-                    style={{
-                      background: isChecked ? "#3DDC84" : "transparent",
-                      border: isChecked ? "none" : "1.5px solid rgba(255,255,255,0.25)",
-                    }}
-                  >
-                    {isChecked && <Check size={13} strokeWidth={3} color="#0E1116" />}
-                  </span>
-                  <span
-                    className="text-[13.5px] leading-snug"
-                    style={{
-                      color: isChecked ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.88)",
-                      textDecoration: isChecked ? "line-through" : "none",
-                    }}
-                  >
-                    {item}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+                  Rotina de inspeção visual
+                </p>
+                <p className="mt-0.5 text-[12px] leading-snug" style={{ color: "rgba(255,255,255,0.4)" }}>
+                  {itensSimples.length === 1 ? itensSimples[0].texto : `${itensSimples.length} verificações — vazamentos, ruídos, fixações e condições gerais`}
+                </p>
+              </div>
+            </button>
+          )}
+
+          {/* Itens estruturados sem grupo (equipamento único, ex: Skid de TDI) */}
+          {itensSemGrupo.map(({ item, idx }) => (
+            <CardEquipamento
+              key={idx}
+              item={item}
+              idx={idx}
+              valores={valores}
+              onChangeValor={(campoId, v) => onChangeValor(area.id, campoId, v)}
+              completo={itemEstaCompleto(item, idx, status)}
+            />
+          ))}
+
+          {/* Grupos de equipamentos (Bombas de Vácuo, Compressores, etc.) — sub-cards colapsáveis */}
+          {Object.entries(itensPorGrupo).map(([grupo, itensDoGrupo]) => (
+            <SubCardGrupo
+              key={grupo}
+              grupo={grupo}
+              itensDoGrupo={itensDoGrupo}
+              status={status}
+              valores={valores}
+              area={area}
+              onChangeValor={onChangeValor}
+              tema={tema}
+            />
+          ))}
 
           {/* Comentários */}
           <div className="mt-5">
@@ -2481,6 +2808,12 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
                   ref={textareaRef}
                   value={status.comentario || ""}
                   onChange={(e) => onChangeComentario(area.id, e.target.value)}
+                  onBlur={() => {
+                    const texto = (status.comentario || "").trim();
+                    if (texto.length > 0 && status.isAnomalia === null) {
+                      setPerguntaAnomaliaAberta(true);
+                    }
+                  }}
                   placeholder="Descreva o que foi observado nesta área (vazamentos, ruídos, peças a trocar, etc.)"
                   rows={4}
                   className="w-full resize-none rounded-xl p-3 text-[13.5px] leading-relaxed outline-none"
@@ -2490,6 +2823,19 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
                     color: "white",
                   }}
                 />
+                {status.isAnomalia !== null && (
+                  <button
+                    onClick={() => setPerguntaAnomaliaAberta(true)}
+                    className="flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium"
+                    style={{
+                      background: status.isAnomalia ? "rgba(240,153,123,0.15)" : "rgba(255,255,255,0.06)",
+                      color: status.isAnomalia ? "#F0997B" : "rgba(255,255,255,0.5)",
+                    }}
+                  >
+                    {status.isAnomalia ? <AlertTriangle size={11} /> : <CheckCircle2 size={11} />}
+                    {status.isAnomalia ? "Marcado como anomalia" : "Marcado como rotineiro"}
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -2600,6 +2946,53 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
             Itens e observações já estão salvos automaticamente
           </p>
         </div>
+
+        {/* Pop-up: essa observação representa uma anomalia? */}
+        {perguntaAnomaliaAberta && (
+          <div
+            className="absolute inset-0 z-10 flex items-center justify-center p-6"
+            style={{ background: "rgba(8,10,13,0.85)", backdropFilter: "blur(3px)" }}
+          >
+            <div
+              className="w-full max-w-xs rounded-2xl p-5"
+              style={{ background: "#181B21", border: "1px solid rgba(255,255,255,0.1)" }}
+            >
+              <div className="mb-3 flex justify-center">
+                <div
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl"
+                  style={{ background: "rgba(240,153,123,0.14)", color: "#F0997B" }}
+                >
+                  <AlertTriangle size={20} />
+                </div>
+              </div>
+              <p className="mb-4 text-center text-[13.5px] leading-snug text-white">
+                Essa observação representa uma anomalia?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    onSetAnomalia(area.id, false);
+                    setPerguntaAnomaliaAberta(false);
+                  }}
+                  className="flex-1 rounded-xl py-2.5 text-[13px] font-medium"
+                  style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.75)" }}
+                >
+                  Não
+                </button>
+                <button
+                  onClick={() => {
+                    onSetAnomalia(area.id, true);
+                    setPerguntaAnomaliaAberta(false);
+                  }}
+                  className="flex-1 rounded-xl py-2.5 text-[13px] font-semibold"
+                  style={{ background: "#F0997B", color: "#14171C" }}
+                >
+                  Sim
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2835,6 +3228,16 @@ function MaintenanceApp() {
   const tema = rotinaAtual.tema;
   const TOTAL_ITENS = useMemo(() => totalItensDe(AREAS), [AREAS]);
   const storageKey = useMemo(() => chaveDoDia(today, tipoRotina), [today, tipoRotina]);
+
+  // ── Tema visual (claro é o padrão; escuro é opcional, salvo no dispositivo) ──
+  const [modoTema, setModoTema] = useState(() => {
+    const salvo = localStorage.getItem("modo_tema");
+    return salvo === "escuro" ? "escuro" : "claro";
+  });
+  const p = PALETA[modoTema];
+  useEffect(() => {
+    localStorage.setItem("modo_tema", modoTema);
+  }, [modoTema]);
 
   // ── Navegação ─────────────────────────────────────────────────────────────
   const [pagina, setPagina] = useState("checklist"); // checklist | perfil | dashboard
@@ -3142,8 +3545,36 @@ function MaintenanceApp() {
   function changeComentario(areaId, texto) {
     setStatus((prev) => ({
       ...prev,
-      [areaId]: { ...(prev[areaId] || { checkedItems: [], valores: {}, comentario: "", savedAt: null }), comentario: texto },
+      [areaId]: { ...(prev[areaId] || { checkedItems: [], valores: {}, comentario: "", isAnomalia: null, savedAt: null }), comentario: texto },
     }));
+  }
+
+  function changeAnomalia(areaId, isAnomalia) {
+    setStatus((prev) => {
+      const areaStatus = prev[areaId] || { checkedItems: [], valores: {}, comentario: "", isAnomalia: null, savedAt: null };
+      const novo = { ...prev, [areaId]: { ...areaStatus, isAnomalia } };
+
+      // Se confirmado como anomalia e há usuário sincronizado, registra no Supabase
+      if (isAnomalia && usuario && usuario.id) {
+        const area = AREAS.find((a) => a.id === areaId);
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, "0");
+        const dd = String(today.getDate()).padStart(2, "0");
+        supaRegistrarAnomalia({
+          usuario_id: usuario.id,
+          usuario_nome: `${usuario.nome} ${usuario.sobrenome}`,
+          tipo_rotina: tipoRotina,
+          data: `${yyyy}-${mm}-${dd}`,
+          area_id: areaId,
+          area_nome: area ? area.nome : String(areaId),
+          observacao: areaStatus.comentario || "",
+        }).catch((e) => {
+          console.error("Falha ao registrar anomalia:", e);
+        });
+      }
+
+      return novo;
+    });
   }
 
   function saveArea(areaId) {
@@ -3414,7 +3845,7 @@ ${reportText}`;
     return (
       <div
         className="flex min-h-full w-full items-center justify-center"
-        style={{ background: "#0E1116" }}
+        style={{ background: p.fundo }}
       >
         <div className="flex flex-col items-center gap-3">
           <div
@@ -3424,7 +3855,7 @@ ${reportText}`;
               borderTopColor: tema.accent,
             }}
           />
-          <span className="text-[13px]" style={{ color: "rgba(255,255,255,0.45)" }}>
+          <span className="text-[13px]" style={{ color: p.textoTerciario }}>
             Carregando rotina de hoje...
           </span>
         </div>
@@ -3435,7 +3866,7 @@ ${reportText}`;
   return (
     <div
       className="relative min-h-full w-full"
-      style={{ background: "#0E1116", fontFamily: "'Inter', -apple-system, sans-serif" }}
+      style={{ background: p.fundo, fontFamily: "'Inter', -apple-system, sans-serif" }}
     >
       {/* Modal de login */}
       {!usuario && <LoginModal onLogin={(u) => setUsuario(u)} />}
@@ -3457,9 +3888,11 @@ ${reportText}`;
 
       {/* Textura sutil de fundo */}
       <div
-        className="pointer-events-none fixed inset-0 opacity-[0.4] transition-opacity duration-300"
+        className="pointer-events-none fixed inset-0 opacity-[0.55] transition-opacity duration-300"
         style={{
-          backgroundImage: `radial-gradient(circle at 15% 0%, ${tema.accentSoft2}, transparent 40%), radial-gradient(circle at 85% 100%, rgba(61,220,132,0.06), transparent 40%)`,
+          backgroundImage: modoTema === "claro"
+            ? `radial-gradient(circle at 12% -5%, ${tema.accentSoft}, transparent 45%), radial-gradient(circle at 90% 15%, ${tema.accentSoft2}, transparent 35%)`
+            : `radial-gradient(circle at 15% 0%, ${tema.accentSoft2}, transparent 40%), radial-gradient(circle at 85% 100%, rgba(61,220,132,0.06), transparent 40%)`,
         }}
       />
 
@@ -3467,7 +3900,7 @@ ${reportText}`;
         {/* Seletor de rotina */}
         <div
           className="mb-4 flex rounded-2xl p-1"
-          style={{ background: "rgba(28,33,40,0.9)", border: "1px solid rgba(255,255,255,0.07)" }}
+          style={{ background: p.superficie, border: `1px solid ${p.borda}` }}
         >
           {Object.entries(ROTINAS).map(([key, r]) => {
             const ativo = key === tipoRotina;
@@ -3479,7 +3912,7 @@ ${reportText}`;
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-[13px] font-semibold transition-all duration-200"
                 style={{
                   background: ativo ? r.tema.gradient : "transparent",
-                  color: ativo ? "#14171C" : "rgba(255,255,255,0.5)",
+                  color: ativo ? "#FFFFFF" : p.textoTerciario,
                 }}
               >
                 <Icon size={15} strokeWidth={2.3} />
@@ -3496,10 +3929,10 @@ ${reportText}`;
             <button
               onClick={() => setMenuAberto(true)}
               className="flex h-9 w-9 flex-col items-center justify-center gap-1.5 rounded-xl"
-              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
+              style={{ background: p.superficie, border: `1px solid ${p.borda}` }}
             >
               {[0,1,2].map((i) => (
-                <span key={i} className="block h-0.5 w-4 rounded-full" style={{ background: "rgba(255,255,255,0.7)" }} />
+                <span key={i} className="block h-0.5 w-4 rounded-full" style={{ background: p.textoSecundario }} />
               ))}
             </button>
             <div>
@@ -3509,13 +3942,13 @@ ${reportText}`;
               >
                 {pagina === "checklist" ? `Rotina — ${rotinaAtual.label}` : pagina === "perfil" ? "Meu perfil" : "Dashboard"}
               </div>
-              <h1 className="text-[18px] font-bold leading-tight text-white">
+              <h1 className="text-[18px] font-bold leading-tight" style={{ color: p.texto }}>
                 {pagina === "checklist"
                   ? (usuario ? `${saudacao}, ${usuario.nome}!` : "Checklist")
                   : pagina === "perfil" ? (usuario ? usuario.nome + " " + usuario.sobrenome : "Perfil")
                   : "Métricas gerais"}
               </h1>
-              <p className="mt-0.5 text-[12px]" style={{ color: "rgba(255,255,255,0.4)" }}>
+              <p className="mt-0.5 text-[12px]" style={{ color: p.textoTerciario }}>
                 {formatarDataLonga(today)}
               </p>
             </div>
@@ -3540,19 +3973,19 @@ ${reportText}`;
         {pagina === "checklist" && (resumoDiaAnterior.mecanica || resumoDiaAnterior.eletrica) && (
           <div
             className="mb-4 rounded-xl px-3 py-2"
-            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
+            style={{ background: p.superficie, border: `1px solid ${p.borda}` }}
           >
-            <p className="mb-1 text-[10px] font-medium uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.35)" }}>Ontem</p>
+            <p className="mb-1 text-[10px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>Ontem</p>
             <div className="flex flex-col gap-0.5">
               {resumoDiaAnterior.mecanica && (
-                <p className="text-[12px]" style={{ color: "rgba(255,255,255,0.6)" }}>
-                  <span style={{ color: "#F5A623" }}>Mecânica</span>{" "}
+                <p className="text-[12px]" style={{ color: p.textoSecundario }}>
+                  <span style={{ color: TEMAS.mecanica.accent }}>Mecânica</span>{" "}
                   — {resumoDiaAnterior.mecanica.concluidos}/{resumoDiaAnterior.mecanica.total} itens ({resumoDiaAnterior.mecanica.percentual}%)
                 </p>
               )}
               {resumoDiaAnterior.eletrica && (
-                <p className="text-[12px]" style={{ color: "rgba(255,255,255,0.6)" }}>
-                  <span style={{ color: "#3B82F6" }}>Elétrica</span>{" "}
+                <p className="text-[12px]" style={{ color: p.textoSecundario }}>
+                  <span style={{ color: TEMAS.eletrica.accent }}>Elétrica</span>{" "}
                   — {resumoDiaAnterior.eletrica.concluidos}/{resumoDiaAnterior.eletrica.total} itens ({resumoDiaAnterior.eletrica.percentual}%)
                 </p>
               )}
@@ -3561,21 +3994,21 @@ ${reportText}`;
         )}
 
         {loadError && pagina === "checklist" && (
-          <p className="mb-3 text-[11px] font-medium" style={{ color: "#F0997B" }}>
+          <p className="mb-3 text-[11px] font-medium" style={{ color: p.alerta }}>
             ⚠ Não foi possível carregar o progresso ({loadError}).
           </p>
         )}
 
         {pagina === "checklist" && usuario && !usuario.id && (
-          <div className="mb-3 rounded-xl px-3 py-2" style={{ background: "rgba(240,153,123,0.1)", border: "1px solid rgba(240,153,123,0.25)" }}>
-            <p className="text-[11.5px] font-medium" style={{ color: "#F0997B" }}>
+          <div className="mb-3 rounded-xl px-3 py-2" style={{ background: p.alertaSoft, border: `1px solid ${p.alerta}40` }}>
+            <p className="text-[11.5px] font-medium" style={{ color: p.alerta }}>
               ⚠ Seu progresso está salvo só neste celular — não aparecerá no Dashboard nem para outros usuários. Saia e entre novamente para sincronizar com a nuvem.
             </p>
           </div>
         )}
 
         {syncError && pagina === "checklist" && (
-          <p className="mb-3 text-[11px] font-medium" style={{ color: "#F0997B" }}>
+          <p className="mb-3 text-[11px] font-medium" style={{ color: p.alerta }}>
             ⚠ Falha ao sincronizar com o servidor ({syncError}). Seus dados estão salvos localmente.
           </p>
         )}
@@ -3669,7 +4102,7 @@ ${reportText}`;
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             {AREAS.map((area) => (
               <AreaCard
                 key={area.id}
@@ -3677,6 +4110,7 @@ ${reportText}`;
                 status={status[area.id]}
                 onOpen={setOpenAreaId}
                 tema={tema}
+                p={p}
                 fotoCount={(fotosPorArea[area.id] || []).length}
               />
             ))}
@@ -3759,6 +4193,7 @@ ${reportText}`;
           onToggleItem={toggleItem}
           onChangeValor={changeValor}
           onChangeComentario={changeComentario}
+          onSetAnomalia={changeAnomalia}
           onSave={saveArea}
           tema={tema}
           fotos={fotosPorArea[openArea.id]}
