@@ -1012,7 +1012,7 @@ function ProgressRing({ progress, size = 44, stroke = 4, color = "#F5A623", trac
 // MENU LATERAL
 // ----------------------------------------------------------------------------
 
-function MenuLateral({ aberto, onFechar, paginaAtual, onNavegar, usuario, tema, onSair }) {
+function MenuLateral({ aberto, onFechar, paginaAtual, onNavegar, usuario, tema, p, onSair }) {
   const [confirmandoSaida, setConfirmandoSaida] = useState(false);
 
   const itens = [
@@ -1027,7 +1027,7 @@ function MenuLateral({ aberto, onFechar, paginaAtual, onNavegar, usuario, tema, 
       {aberto && (
         <div
           className="fixed inset-0 z-40"
-          style={{ background: "rgba(8,10,13,0.7)", backdropFilter: "blur(4px)" }}
+          style={{ background: p.overlay, backdropFilter: "blur(4px)" }}
           onClick={onFechar}
         />
       )}
@@ -1036,11 +1036,11 @@ function MenuLateral({ aberto, onFechar, paginaAtual, onNavegar, usuario, tema, 
       <div
         className="fixed left-0 top-0 z-50 flex h-full w-72 flex-col"
         style={{
-          background: "rgba(16,19,24,0.99)",
-          borderRight: "1px solid rgba(255,255,255,0.07)",
+          background: p.superficie,
+          borderRight: `1px solid ${p.borda}`,
           transform: aberto ? "translateX(0)" : "translateX(-100%)",
           transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)",
-          boxShadow: aberto ? "8px 0 40px rgba(0,0,0,0.5)" : "none",
+          boxShadow: aberto ? (p === PALETA.claro ? "8px 0 40px rgba(23,23,23,0.15)" : "8px 0 40px rgba(0,0,0,0.5)") : "none",
         }}
       >
         {/* Cabeçalho do menu */}
@@ -1057,14 +1057,14 @@ function MenuLateral({ aberto, onFechar, paginaAtual, onNavegar, usuario, tema, 
             }
           </div>
           <div className="min-w-0">
-            <p className="truncate text-[14px] font-semibold text-white">
+            <p className="truncate text-[14px] font-semibold" style={{ color: p.texto }}>
               {usuario ? `${usuario.nome} ${usuario.sobrenome}` : "Usuário"}
             </p>
-            <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>Manutenção</p>
+            <p className="text-[11px]" style={{ color: p.textoTerciario }}>Manutenção</p>
           </div>
         </div>
 
-        <div className="mx-4 mb-4 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
+        <div className="mx-4 mb-4 h-px" style={{ background: p.borda }} />
 
         {/* Itens de navegação */}
         <nav className="flex flex-1 flex-col gap-1 px-3">
@@ -1077,7 +1077,7 @@ function MenuLateral({ aberto, onFechar, paginaAtual, onNavegar, usuario, tema, 
                 className="flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-all"
                 style={{
                   background: ativo ? tema.accentSoft : "transparent",
-                  color: ativo ? tema.accent : "rgba(255,255,255,0.6)",
+                  color: ativo ? tema.accent : p.textoSecundario,
                   fontWeight: ativo ? "600" : "400",
                 }}
               >
@@ -1094,7 +1094,7 @@ function MenuLateral({ aberto, onFechar, paginaAtual, onNavegar, usuario, tema, 
           })}
         </nav>
 
-        <div className="mx-4 mb-4 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
+        <div className="mx-4 mb-4 h-px" style={{ background: p.borda }} />
 
         {/* Sair */}
         <div className="px-3 pb-3">
@@ -1102,28 +1102,28 @@ function MenuLateral({ aberto, onFechar, paginaAtual, onNavegar, usuario, tema, 
             <button
               onClick={() => setConfirmandoSaida(true)}
               className="flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-all"
-              style={{ color: "#F0997B" }}
+              style={{ color: p.alerta }}
             >
               <X size={18} strokeWidth={2} />
               <span className="text-[14px] font-medium">Sair da conta</span>
             </button>
           ) : (
-            <div className="flex flex-col gap-2 rounded-2xl p-3" style={{ background: "rgba(240,153,123,0.08)", border: "1px solid rgba(240,153,123,0.25)" }}>
-              <p className="text-[12px]" style={{ color: "rgba(255,255,255,0.6)" }}>
+            <div className="flex flex-col gap-2 rounded-2xl p-3" style={{ background: p.alertaSoft, border: `1px solid ${p.alerta}40` }}>
+              <p className="text-[12px]" style={{ color: p.textoSecundario }}>
                 Tem certeza? Você precisará digitar o PIN novamente para entrar.
               </p>
               <div className="flex gap-2">
                 <button
                   onClick={() => setConfirmandoSaida(false)}
                   className="flex-1 rounded-xl py-2 text-[12.5px] font-medium"
-                  style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)" }}
+                  style={{ background: p.superficieAlt, color: p.textoSecundario }}
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={() => { onSair(); setConfirmandoSaida(false); }}
                   className="flex-1 rounded-xl py-2 text-[12.5px] font-semibold"
-                  style={{ background: "#F0997B", color: "#0E1116" }}
+                  style={{ background: p.alerta, color: "#FFFFFF" }}
                 >
                   Sair
                 </button>
@@ -1133,7 +1133,7 @@ function MenuLateral({ aberto, onFechar, paginaAtual, onNavegar, usuario, tema, 
         </div>
 
         {/* Versão */}
-        <p className="px-5 pb-8 text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>
+        <p className="px-5 pb-8 text-[11px]" style={{ color: p.textoTerciario }}>
           Rotina de Manutenção v2.0
         </p>
       </div>
@@ -1145,7 +1145,7 @@ function MenuLateral({ aberto, onFechar, paginaAtual, onNavegar, usuario, tema, 
 // TELA DE PERFIL
 // ----------------------------------------------------------------------------
 
-function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
+function TelaPerfil({ usuario, onAtualizarUsuario, tema, p, modoTema, onMudarModoTema }) {
   const [fotoCarregando, setFotoCarregando] = useState(false);
   const [alterandoSenha, setAlterandoSenha] = useState(false);
   const [senhaAtual, setSenhaAtual] = useState("");
@@ -1254,9 +1254,9 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
   }
 
   const inputStyle = {
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    color: "white", outline: "none", borderRadius: "12px",
+    background: p.superficieAlt,
+    border: `1px solid ${p.bordaForte}`,
+    color: p.texto, outline: "none", borderRadius: "12px",
     padding: "10px 14px", fontSize: "14px", width: "100%",
   };
 
@@ -1265,7 +1265,7 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
       {/* Avatar */}
       <div
         className="flex flex-col items-center gap-3 rounded-3xl p-6"
-        style={{ background: "rgba(28,33,40,0.9)", border: "1px solid rgba(255,255,255,0.07)" }}
+        style={{ background: p.superficie, border: `1px solid ${p.borda}`, boxShadow: p === PALETA.claro ? "0 2px 8px rgba(23,23,23,0.06)" : "none" }}
       >
         <div className="relative">
           <div
@@ -1284,15 +1284,15 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
           <button
             onClick={() => fileRef.current && fileRef.current.click()}
             className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full"
-            style={{ background: tema.gradient, color: "#0E1116" }}
+            style={{ background: tema.gradient, color: "#FFFFFF" }}
           >
             <Camera size={13} strokeWidth={2.5} />
           </button>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFoto} />
         </div>
         <div className="text-center">
-          <h2 className="text-[18px] font-bold text-white">{usuario ? usuario.nome : ""} {usuario ? usuario.sobrenome : ""}</h2>
-          <p className="text-[12px]" style={{ color: "rgba(255,255,255,0.4)" }}>Equipe de Manutenção</p>
+          <h2 className="text-[18px] font-bold" style={{ color: p.texto }}>{usuario ? usuario.nome : ""} {usuario ? usuario.sobrenome : ""}</h2>
+          <p className="text-[12px]" style={{ color: p.textoTerciario }}>Equipe de Manutenção</p>
         </div>
       </div>
 
@@ -1300,9 +1300,9 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
       {metricas && (
         <div
           className="rounded-3xl p-5"
-          style={{ background: "rgba(28,33,40,0.9)", border: "1px solid rgba(255,255,255,0.07)" }}
+          style={{ background: p.superficie, border: `1px solid ${p.borda}`, boxShadow: p === PALETA.claro ? "0 2px 8px rgba(23,23,23,0.06)" : "none" }}
         >
-          <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+          <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: p.textoTerciario }}>
             Últimos 30 dias
           </h3>
           <div className="grid grid-cols-3 gap-3">
@@ -1314,10 +1314,10 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
               <div
                 key={label}
                 className="flex flex-col items-center gap-1 rounded-2xl py-3"
-                style={{ background: "rgba(255,255,255,0.04)" }}
+                style={{ background: p.superficieAlt }}
               >
                 <span className="text-[22px] font-bold" style={{ color: tema.accent }}>{valor}</span>
-                <span className="text-center text-[10px] leading-tight" style={{ color: "rgba(255,255,255,0.4)" }}>{label}</span>
+                <span className="text-center text-[10px] leading-tight" style={{ color: p.textoTerciario }}>{label}</span>
               </div>
             ))}
           </div>
@@ -1328,12 +1328,12 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
       {metricas && (
         <div
           className="rounded-3xl p-5"
-          style={{ background: "rgba(28,33,40,0.9)", border: "1px solid rgba(255,255,255,0.07)" }}
+          style={{ background: p.superficie, border: `1px solid ${p.borda}`, boxShadow: p === PALETA.claro ? "0 2px 8px rgba(23,23,23,0.06)" : "none" }}
         >
-          <h3 className="mb-1 text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+          <h3 className="mb-1 text-[13px] font-semibold uppercase tracking-wider" style={{ color: p.textoTerciario }}>
             Anomalias identificadas
           </h3>
-          <p className="mb-4 text-[11.5px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+          <p className="mb-4 text-[11.5px]" style={{ color: p.textoTerciario }}>
             Observações confirmadas como anomalia durante suas inspeções
           </p>
           <div className="grid grid-cols-2 gap-3">
@@ -1344,10 +1344,10 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
               <div
                 key={label}
                 className="flex flex-col items-center gap-1 rounded-2xl py-3"
-                style={{ background: "rgba(240,153,123,0.08)" }}
+                style={{ background: p.alertaSoft }}
               >
-                <span className="text-[22px] font-bold" style={{ color: "#F0997B" }}>{valor}</span>
-                <span className="text-center text-[10px] leading-tight" style={{ color: "rgba(255,255,255,0.4)" }}>{label}</span>
+                <span className="text-[22px] font-bold" style={{ color: p.alerta }}>{valor}</span>
+                <span className="text-center text-[10px] leading-tight" style={{ color: p.textoTerciario }}>{label}</span>
               </div>
             ))}
           </div>
@@ -1357,10 +1357,10 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
       {/* Alterar senha */}
       <div
         className="rounded-3xl p-5"
-        style={{ background: "rgba(28,33,40,0.9)", border: "1px solid rgba(255,255,255,0.07)" }}
+        style={{ background: p.superficie, border: `1px solid ${p.borda}`, boxShadow: p === PALETA.claro ? "0 2px 8px rgba(23,23,23,0.06)" : "none" }}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+          <h3 className="text-[13px] font-semibold uppercase tracking-wider" style={{ color: p.textoTerciario }}>
             Segurança
           </h3>
           <button
@@ -1380,7 +1380,7 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
               { label: "Confirmar novo PIN", val: confirmarNovaSenha, set: setConfirmarNovaSenha },
             ].map(({ label, val, set }) => (
               <div key={label}>
-                <label className="mb-1 block text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>{label}</label>
+                <label className="mb-1 block text-[11px]" style={{ color: p.textoTerciario }}>{label}</label>
                 <div className="relative">
                   <input
                     type={mostrarSenhas ? "text" : "password"}
@@ -1395,7 +1395,7 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
                     type="button"
                     onClick={() => setMostrarSenhas(!mostrarSenhas)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-medium"
-                    style={{ color: "rgba(255,255,255,0.4)" }}
+                    style={{ color: p.textoTerciario }}
                   >
                     {mostrarSenhas ? "Ocultar" : "Ver"}
                   </button>
@@ -1404,7 +1404,7 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
             ))}
 
             {msgSenha && (
-              <p className="text-[12px]" style={{ color: msgSenha.tipo === "ok" ? "#3DDC84" : "#F0997B" }}>
+              <p className="text-[12px]" style={{ color: msgSenha.tipo === "ok" ? p.sucesso : p.alerta }}>
                 {msgSenha.texto}
               </p>
             )}
@@ -1412,7 +1412,7 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
             <button
               onClick={handleAlterarSenha}
               className="w-full rounded-2xl py-3 text-[14px] font-semibold"
-              style={{ background: tema.gradient, color: "#0E1116" }}
+              style={{ background: tema.gradient, color: "#FFFFFF" }}
             >
               Salvar novo PIN
             </button>
@@ -1420,10 +1420,38 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
         )}
 
         {!alterandoSenha && (
-          <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.5)" }}>
+          <p className="text-[13px]" style={{ color: p.textoSecundario }}>
             PIN de 4 dígitos configurado ✓
           </p>
         )}
+      </div>
+
+      {/* Aparência */}
+      <div
+        className="rounded-3xl p-5"
+        style={{ background: p.superficie, border: `1px solid ${p.borda}`, boxShadow: p === PALETA.claro ? "0 2px 8px rgba(23,23,23,0.06)" : "none" }}
+      >
+        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: p.textoTerciario }}>
+          Aparência
+        </h3>
+        <div className="flex rounded-2xl p-1" style={{ background: p.superficieAlt }}>
+          {[
+            { valor: "claro", label: "Claro" },
+            { valor: "escuro", label: "Escuro" },
+          ].map(({ valor, label }) => (
+            <button
+              key={valor}
+              onClick={() => onMudarModoTema(valor)}
+              className="flex-1 rounded-xl py-2.5 text-[13px] font-medium transition-all"
+              style={{
+                background: modoTema === valor ? tema.gradient : "transparent",
+                color: modoTema === valor ? "#FFFFFF" : p.textoTerciario,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -1433,7 +1461,7 @@ function TelaPerfil({ usuario, onAtualizarUsuario, tema }) {
 // MODAL: EDITAR USUÁRIO (uso administrativo)
 // ----------------------------------------------------------------------------
 
-function ModalEditarUsuario({ usuarioAlvo, onClose, onSalvo, tema }) {
+function ModalEditarUsuario({ usuarioAlvo, onClose, onSalvo, tema, p }) {
   const [nome, setNome] = useState(usuarioAlvo.nome);
   const [sobrenome, setSobrenome] = useState(usuarioAlvo.sobrenome);
   const [salvando, setSalvando] = useState(false);
@@ -1472,26 +1500,26 @@ function ModalEditarUsuario({ usuarioAlvo, onClose, onSalvo, tema }) {
   }
 
   const inputStyle = {
-    background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
-    color: "white", outline: "none", borderRadius: "12px", padding: "10px 14px",
+    background: p.superficieAlt, border: `1px solid ${p.bordaForte}`,
+    color: p.texto, outline: "none", borderRadius: "12px", padding: "10px 14px",
     fontSize: "14px", width: "100%",
   };
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-5"
-      style={{ background: "rgba(8,10,13,0.85)", backdropFilter: "blur(8px)" }}
+      style={{ background: p.overlay, backdropFilter: "blur(8px)" }}
       onClick={onClose}
     >
       <div
         className="w-full max-w-sm rounded-3xl p-6"
-        style={{ background: "rgba(20,23,28,0.98)", border: "1px solid rgba(255,255,255,0.1)" }}
+        style={{ background: p.superficie, border: `1px solid ${p.borda}`, boxShadow: p === PALETA.claro ? "0 16px 48px rgba(23,23,23,0.2)" : "none" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-[16px] font-bold text-white">Editar usuário</h2>
-          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-xl" style={{ background: "rgba(255,255,255,0.06)" }}>
-            <X size={15} color="rgba(255,255,255,0.6)" />
+          <h2 className="text-[16px] font-bold" style={{ color: p.texto }}>Editar usuário</h2>
+          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-xl" style={{ background: p.superficieAlt }}>
+            <X size={15} color={p.textoSecundario} />
           </button>
         </div>
 
@@ -1512,7 +1540,7 @@ function ModalEditarUsuario({ usuarioAlvo, onClose, onSalvo, tema }) {
             <button
               onClick={() => fileRef.current && fileRef.current.click()}
               className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full"
-              style={{ background: tema.gradient, color: "#0E1116" }}
+              style={{ background: tema.gradient, color: "#FFFFFF" }}
             >
               <Camera size={13} strokeWidth={2.5} />
             </button>
@@ -1523,24 +1551,24 @@ function ModalEditarUsuario({ usuarioAlvo, onClose, onSalvo, tema }) {
         {/* Campos */}
         <div className="mb-4 flex flex-col gap-3">
           <div>
-            <label className="mb-1 block text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>Nome</label>
+            <label className="mb-1 block text-[11px]" style={{ color: p.textoTerciario }}>Nome</label>
             <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} style={inputStyle} />
           </div>
           <div>
-            <label className="mb-1 block text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>Sobrenome</label>
+            <label className="mb-1 block text-[11px]" style={{ color: p.textoTerciario }}>Sobrenome</label>
             <input type="text" value={sobrenome} onChange={(e) => setSobrenome(e.target.value)} style={inputStyle} />
           </div>
         </div>
 
         {erro && (
-          <p className="mb-3 text-[12px]" style={{ color: "#F0997B" }}>{erro}</p>
+          <p className="mb-3 text-[12px]" style={{ color: p.alerta }}>{erro}</p>
         )}
 
         <button
           onClick={handleSalvar}
           disabled={salvando}
           className="w-full rounded-2xl py-3 text-[14px] font-semibold"
-          style={{ background: tema.gradient, color: "#0E1116", opacity: salvando ? 0.6 : 1 }}
+          style={{ background: tema.gradient, color: "#FFFFFF", opacity: salvando ? 0.6 : 1 }}
         >
           {salvando ? "Salvando..." : "Salvar alterações"}
         </button>
@@ -1553,7 +1581,7 @@ function ModalEditarUsuario({ usuarioAlvo, onClose, onSalvo, tema }) {
 // TELA DASHBOARD
 // ----------------------------------------------------------------------------
 
-function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
+function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey, p }) {
   const ehAdmin = !!(usuario && usuario.role === "admin");
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(true);
@@ -1578,7 +1606,7 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
   if (carregando) {
     return (
       <div className="flex flex-col items-center gap-3 py-16">
-        <div className="text-[13px]" style={{ color: "rgba(255,255,255,0.4)" }}>Carregando dados...</div>
+        <div className="text-[13px]" style={{ color: p.textoTerciario }}>Carregando dados...</div>
       </div>
     );
   }
@@ -1638,9 +1666,9 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
     return { nome: `BV${n}`, status: ultimo };
   });
 
-  const corStatus = (s) => s === "Operando" ? "#3DDC84" : s === "Manutenção" ? "#F0997B" : "rgba(255,255,255,0.3)";
+  const corStatus = (s) => s === "Operando" ? p.sucesso : s === "Manutenção" ? p.alerta : p.textoTerciario;
   const labelRotina = (r) => r === "mecanica" ? "Mecânica" : r === "eletrica" ? "Elétrica" : "Start up";
-  const corRotina   = (r) => r === "mecanica" ? "#F5A623" : r === "eletrica" ? "#3B82F6" : "#2DD4BF";
+  const corRotina   = (r) => r === "mecanica" ? TEMAS.mecanica.accent : r === "eletrica" ? TEMAS.eletrica.accent : TEMAS.startup.accent;
 
   // ── Anomalias agregadas ──────────────────────────────────────────────────
   const anomaliasPorArea = {};
@@ -1685,24 +1713,24 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
 
   const medalha = (pos) => pos === 0 ? "🥇" : pos === 1 ? "🥈" : pos === 2 ? "🥉" : null;
 
-  const cardStyle = { background: "rgba(28,33,40,0.9)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: "24px", padding: "20px" };
+  const cardStyle = { background: p.superficie, border: `1px solid ${p.borda}`, borderRadius: "24px", padding: "20px", boxShadow: p === PALETA.claro ? "0 2px 8px rgba(23,23,23,0.06)" : "none" };
 
   return (
     <div className="flex flex-col gap-4 pb-8">
 
       {/* Seletor de período */}
-      <div className="flex rounded-2xl p-1" style={{ background: "rgba(28,33,40,0.9)", border: "1px solid rgba(255,255,255,0.07)" }}>
-        {[7, 30].map((p) => (
+      <div className="flex rounded-2xl p-1" style={{ background: p.superficie, border: `1px solid ${p.borda}` }}>
+        {[7, 30].map((periodoOpcao) => (
           <button
-            key={p}
-            onClick={() => setPeriodo(p)}
+            key={periodoOpcao}
+            onClick={() => setPeriodo(periodoOpcao)}
             className="flex-1 rounded-xl py-2 text-[13px] font-medium transition-all"
             style={{
-              background: periodo === p ? tema.gradient : "transparent",
-              color: periodo === p ? "#0E1116" : "rgba(255,255,255,0.5)",
+              background: periodo === periodoOpcao ? tema.gradient : "transparent",
+              color: periodo === periodoOpcao ? "#FFFFFF" : p.textoTerciario,
             }}
           >
-            {p === 7 ? "Últimos 7 dias" : "Últimos 30 dias"}
+            {periodoOpcao === 7 ? "Últimos 7 dias" : "Últimos 30 dias"}
           </button>
         ))}
       </div>
@@ -1711,23 +1739,23 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
       <div className="grid grid-cols-3 gap-2">
         {[
           { label: "Taxa geral", valor: `${taxaGeral}%`, cor: tema.accent },
-          { label: "Dias com dados", valor: diasComDados, cor: "#3DDC84" },
-          { label: "Usuários", valor: usuarios.length, cor: "#3B82F6" },
+          { label: "Dias com dados", valor: diasComDados, cor: p.sucesso },
+          { label: "Usuários", valor: usuarios.length, cor: TEMAS.eletrica.accent },
         ].map(({ label, valor, cor }) => (
           <div key={label} style={{ ...cardStyle, padding: "14px", textAlign: "center" }}>
             <p className="text-[22px] font-bold" style={{ color: cor }}>{valor}</p>
-            <p className="text-[10px] leading-tight mt-1" style={{ color: "rgba(255,255,255,0.4)" }}>{label}</p>
+            <p className="text-[10px] leading-tight mt-1" style={{ color: p.textoTerciario }}>{label}</p>
           </div>
         ))}
       </div>
 
       {/* Progresso hoje por usuário */}
       <div style={cardStyle}>
-        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: p.textoTerciario }}>
           Hoje — {Object.keys(porUsuarioHoje).length > 0 ? `${Object.keys(porUsuarioHoje).length} usuário(s) ativos` : "nenhum registro ainda"}
         </h3>
         {Object.keys(porUsuarioHoje).length === 0 ? (
-          <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.3)" }}>Nenhum dado registrado hoje ainda.</p>
+          <p className="text-[13px]" style={{ color: p.textoTerciario }}>Nenhum dado registrado hoje ainda.</p>
         ) : (
           <div className="flex flex-col gap-3">
             {Object.entries(porUsuarioHoje).map(([nome, d]) => {
@@ -1742,7 +1770,7 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
                       >
                         {nome[0]}
                       </div>
-                      <span className="text-[13px] font-medium text-white">{nome}</span>
+                      <span className="text-[13px] font-medium" style={{ color: p.texto }}>{nome}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       {[...d.rotinas].map((r) => (
@@ -1750,11 +1778,11 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
                           {labelRotina(r)}
                         </span>
                       ))}
-                      <span className="text-[12px] font-semibold" style={{ color: pct === 100 ? "#3DDC84" : "rgba(255,255,255,0.6)" }}>{pct}%</span>
+                      <span className="text-[12px] font-semibold" style={{ color: pct === 100 ? p.sucesso : p.textoSecundario }}>{pct}%</span>
                     </div>
                   </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.07)" }}>
-                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: pct === 100 ? "#3DDC84" : tema.accent }} />
+                  <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: p.superficieAlt }}>
+                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: pct === 100 ? p.sucesso : tema.accent }} />
                   </div>
                 </div>
               );
@@ -1765,11 +1793,11 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
 
       {/* Gráfico de barras — progresso diário */}
       <div style={cardStyle}>
-        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: p.textoTerciario }}>
           Progresso diário
         </h3>
         {diasOrdenados.length === 0 ? (
-          <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.3)" }}>Sem dados no período.</p>
+          <p className="text-[13px]" style={{ color: p.textoTerciario }}>Sem dados no período.</p>
         ) : (
           <div className="flex items-end gap-1.5" style={{ height: "80px" }}>
             {diasOrdenados.map((dia) => {
@@ -1782,9 +1810,9 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
                 <div key={dia} className="flex flex-1 flex-col items-center gap-1">
                   <div
                     className="w-full rounded-t-md transition-all"
-                    style={{ height: `${altura}px`, background: pct > 0.8 ? "#3DDC84" : pct > 0.5 ? tema.accent : "rgba(255,255,255,0.15)" }}
+                    style={{ height: `${altura}px`, background: pct > 0.8 ? p.sucesso : pct > 0.5 ? tema.accent : p.superficieAlt }}
                   />
-                  <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.3)" }}>{dd}</span>
+                  <span className="text-[9px]" style={{ color: p.textoTerciario }}>{dd}</span>
                 </div>
               );
             })}
@@ -1794,7 +1822,7 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
 
       {/* Queimadores — temperatura média */}
       <div style={cardStyle}>
-        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: p.textoTerciario }}>
           Queimadores — temp. média (°C)
         </h3>
         <div className="flex gap-3">
@@ -1802,12 +1830,12 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
             <div
               key={nome}
               className="flex flex-1 flex-col items-center gap-1 rounded-2xl py-4"
-              style={{ background: "rgba(255,255,255,0.04)" }}
+              style={{ background: p.superficieAlt }}
             >
-              <span className="text-[20px] font-bold" style={{ color: media ? "#F0997B" : "rgba(255,255,255,0.2)" }}>
+              <span className="text-[20px] font-bold" style={{ color: media ? p.alerta : p.textoTerciario }}>
                 {media !== null ? `${media}°` : "—"}
               </span>
-              <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>{nome}</span>
+              <span className="text-[11px]" style={{ color: p.textoTerciario }}>{nome}</span>
             </div>
           ))}
         </div>
@@ -1815,7 +1843,7 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
 
       {/* Bombas de vácuo — status atual */}
       <div style={cardStyle}>
-        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: p.textoTerciario }}>
           Bombas de vácuo — status
         </h3>
         <div className="flex gap-2 flex-wrap">
@@ -1823,11 +1851,11 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
             <div
               key={nome}
               className="flex flex-col items-center gap-1.5 rounded-2xl px-4 py-3"
-              style={{ background: "rgba(255,255,255,0.04)", minWidth: "56px" }}
+              style={{ background: p.superficieAlt, minWidth: "56px" }}
             >
               <div className="h-2.5 w-2.5 rounded-full" style={{ background: corStatus(status) }} />
-              <span className="text-[11px] font-semibold text-white">{nome}</span>
-              <span className="text-[9px] text-center leading-tight" style={{ color: "rgba(255,255,255,0.4)" }}>
+              <span className="text-[11px] font-semibold" style={{ color: p.texto }}>{nome}</span>
+              <span className="text-[9px] text-center leading-tight" style={{ color: p.textoTerciario }}>
                 {status || "—"}
               </span>
             </div>
@@ -1837,29 +1865,29 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
 
       {/* Anomalias — visão agregada de todos os usuários */}
       <div style={cardStyle}>
-        <h3 className="mb-1 text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+        <h3 className="mb-1 text-[13px] font-semibold uppercase tracking-wider" style={{ color: p.textoTerciario }}>
           ⚠ Anomalias — {periodo === 7 ? "últimos 7 dias" : "últimos 30 dias"}
         </h3>
-        <p className="mb-4 text-[11.5px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+        <p className="mb-4 text-[11.5px]" style={{ color: p.textoTerciario }}>
           {(anomalias || []).length} ocorrência(s) confirmadas pela equipe
         </p>
 
         {rankingAreas.length > 0 && (
           <div className="mb-4">
-            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.35)" }}>
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>
               Por área
             </p>
             <div className="flex flex-col gap-1.5">
               {rankingAreas.map(({ area, count }) => (
                 <div key={area} className="flex items-center gap-2">
-                  <span className="w-32 shrink-0 truncate text-[12px]" style={{ color: "rgba(255,255,255,0.7)" }}>{area}</span>
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
+                  <span className="w-32 shrink-0 truncate text-[12px]" style={{ color: p.textoSecundario }}>{area}</span>
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: p.superficieAlt }}>
                     <div
                       className="h-full rounded-full"
-                      style={{ width: `${(count / rankingAreas[0].count) * 100}%`, background: "#F0997B" }}
+                      style={{ width: `${(count / rankingAreas[0].count) * 100}%`, background: p.alerta }}
                     />
                   </div>
-                  <span className="w-5 shrink-0 text-right text-[12px] font-semibold" style={{ color: "#F0997B" }}>{count}</span>
+                  <span className="w-5 shrink-0 text-right text-[12px] font-semibold" style={{ color: p.alerta }}>{count}</span>
                 </div>
               ))}
             </div>
@@ -1868,37 +1896,37 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
 
         {anomaliasRecentes.length > 0 ? (
           <div>
-            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.35)" }}>
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>
               Mais recentes
             </p>
             <div className="flex flex-col gap-2">
               {anomaliasRecentes.map((a) => (
-                <div key={a.id} className="rounded-xl p-2.5" style={{ background: "rgba(240,153,123,0.06)", border: "1px solid rgba(240,153,123,0.15)" }}>
+                <div key={a.id} className="rounded-xl p-2.5" style={{ background: p.alertaSoft, border: `1px solid ${p.alerta}30` }}>
                   <div className="mb-1 flex items-center justify-between">
-                    <span className="text-[11.5px] font-medium" style={{ color: "#F0997B" }}>{a.area_nome}</span>
-                    <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                    <span className="text-[11.5px] font-medium" style={{ color: p.alerta }}>{a.area_nome}</span>
+                    <span className="text-[10px]" style={{ color: p.textoTerciario }}>
                       {a.usuario_nome} · {formatarDataCurta(new Date(a.data + "T00:00:00"))}
                     </span>
                   </div>
                   {a.observacao && (
-                    <p className="text-[12px] leading-snug" style={{ color: "rgba(255,255,255,0.6)" }}>{a.observacao}</p>
+                    <p className="text-[12px] leading-snug" style={{ color: p.textoSecundario }}>{a.observacao}</p>
                   )}
                 </div>
               ))}
             </div>
           </div>
         ) : (
-          <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.3)" }}>Nenhuma anomalia registrada no período.</p>
+          <p className="text-[13px]" style={{ color: p.textoTerciario }}>Nenhuma anomalia registrada no período.</p>
         )}
       </div>
 
       {/* Ranking de usuários */}
       <div style={cardStyle}>
-        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: p.textoTerciario }}>
           🏆 Ranking — {periodo === 7 ? "últimos 7 dias" : "últimos 30 dias"}
         </h3>
         {ranking.length === 0 ? (
-          <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.3)" }}>Sem dados no período.</p>
+          <p className="text-[13px]" style={{ color: p.textoTerciario }}>Sem dados no período.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {ranking.map((r, idx) => {
@@ -1908,9 +1936,9 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
                 <div
                   key={r.nome}
                   className="flex items-center gap-3 rounded-2xl px-3 py-2.5"
-                  style={{ background: idx === 0 ? "rgba(245,166,35,0.08)" : "rgba(255,255,255,0.04)", border: idx === 0 ? "1px solid rgba(245,166,35,0.25)" : "1px solid transparent" }}
+                  style={{ background: idx === 0 ? tema.accentSoft : p.superficieAlt, border: idx === 0 ? `1px solid ${tema.accentBorder}` : "1px solid transparent" }}
                 >
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center text-[13px] font-bold" style={{ color: "rgba(255,255,255,0.4)" }}>
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center text-[13px] font-bold" style={{ color: p.textoTerciario }}>
                     {med || `${idx + 1}º`}
                   </div>
                   <div
@@ -1920,12 +1948,12 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
                     {foto ? <img src={foto} alt="" className="h-full w-full object-cover" /> : r.nome[0].toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-medium text-white">{r.nome}</p>
-                    <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>{r.dias} dia(s) ativos</p>
+                    <p className="truncate text-[13px] font-medium" style={{ color: p.texto }}>{r.nome}</p>
+                    <p className="text-[11px]" style={{ color: p.textoTerciario }}>{r.dias} dia(s) ativos</p>
                   </div>
                   <div className="text-right">
                     <p className="text-[15px] font-bold" style={{ color: tema.accent }}>{r.checked}</p>
-                    <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>itens ({r.pct}%)</p>
+                    <p className="text-[10px]" style={{ color: p.textoTerciario }}>itens ({r.pct}%)</p>
                   </div>
                 </div>
               );
@@ -1936,7 +1964,7 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
 
       {/* Lista de usuários cadastrados */}
       <div style={cardStyle}>
-        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+        <h3 className="mb-4 text-[13px] font-semibold uppercase tracking-wider" style={{ color: p.textoTerciario }}>
           Usuários cadastrados ({usuarios.length})
         </h3>
         <div className="flex flex-col gap-2">
@@ -1957,7 +1985,7 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
               : "sem registros";
 
             return (
-              <div key={u.id} className="flex items-center gap-3 rounded-2xl px-3 py-2.5" style={{ background: "rgba(255,255,255,0.04)" }}>
+              <div key={u.id} className="flex items-center gap-3 rounded-2xl px-3 py-2.5" style={{ background: p.superficieAlt }}>
                 <div className="relative shrink-0">
                   <div
                     className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl text-[13px] font-bold"
@@ -1971,13 +1999,13 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
                   {ativoHoje && (
                     <span
                       className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2"
-                      style={{ background: "#3DDC84", borderColor: "rgba(28,33,40,0.9)" }}
+                      style={{ background: p.sucesso, borderColor: p.superficie }}
                       title="Ativo hoje"
                     />
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-medium text-white truncate">
+                  <p className="text-[13px] font-medium truncate" style={{ color: p.texto }}>
                     {u.nome} {u.sobrenome}
                     {u.role === "admin" && (
                       <span className="ml-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: tema.accentSoft, color: tema.accent }}>
@@ -1985,7 +2013,7 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
                       </span>
                     )}
                   </p>
-                  <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>
+                  <p className="text-[11px]" style={{ color: p.textoTerciario }}>
                     {diasU} dia(s) ativos · última vez: {textoUltimaAtividade}
                   </p>
                 </div>
@@ -1993,7 +2021,7 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
                   <button
                     onClick={() => onEditarUsuario(u)}
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
-                    style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.5)" }}
+                    style={{ background: p.superficie, color: p.textoSecundario }}
                   >
                     <Settings2 size={14} />
                   </button>
@@ -2002,7 +2030,7 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
             );
           })}
           {usuarios.length === 0 && (
-            <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.3)" }}>Nenhum usuário cadastrado ainda.</p>
+            <p className="text-[13px]" style={{ color: p.textoTerciario }}>Nenhum usuário cadastrado ainda.</p>
           )}
         </div>
       </div>
@@ -2014,7 +2042,7 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey }) {
 // LOGIN MODAL
 // ----------------------------------------------------------------------------
 
-function LoginModal({ onLogin }) {
+function LoginModal({ onLogin, p, tema }) {
   const [step, setStep] = useState("login"); // "login" | "cadastro"
   // Cadastro
   const [nome, setNome] = useState("");
@@ -2144,23 +2172,23 @@ function LoginModal({ onLogin }) {
   }
 
   const inputStyle = {
-    background: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.12)",
-    color: "white",
+    background: p.superficieAlt,
+    border: `1px solid ${p.bordaForte}`,
+    color: p.texto,
     outline: "none",
   };
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-5"
-      style={{ background: "rgba(8,10,13,0.92)", backdropFilter: "blur(12px)" }}
+      style={{ background: p.overlay, backdropFilter: "blur(12px)" }}
     >
       <div
         className="w-full max-w-sm rounded-3xl p-6 transition-all duration-350"
         style={{
-          background: "rgba(20,23,28,0.98)",
-          border: "1px solid rgba(255,255,255,0.1)",
-          boxShadow: "0 32px 80px rgba(0,0,0,0.6)",
+          background: p.superficie,
+          border: `1px solid ${p.borda}`,
+          boxShadow: p === PALETA.claro ? "0 24px 64px rgba(23,23,23,0.22)" : "0 32px 80px rgba(0,0,0,0.6)",
           transform: animando ? "scale(0.92)" : "scale(1)",
           opacity: animando ? 0 : 1,
         }}
@@ -2169,13 +2197,13 @@ function LoginModal({ onLogin }) {
         <div className="mb-5 flex flex-col items-center gap-2">
           <div
             className="flex h-14 w-14 items-center justify-center rounded-2xl"
-            style={{ background: "rgba(245,166,35,0.12)", border: "1px solid rgba(245,166,35,0.25)" }}
+            style={{ background: tema.accentSoft, border: `1px solid ${tema.accentBorder}` }}
           >
-            <ClipboardList size={26} color="#F5A623" strokeWidth={2} />
+            <ClipboardList size={26} color={tema.accent} strokeWidth={2} />
           </div>
           <div className="text-center">
-            <h2 className="text-[17px] font-bold text-white">Rotina de Manutenção</h2>
-            <p className="text-[12px]" style={{ color: "rgba(255,255,255,0.4)" }}>
+            <h2 className="text-[17px] font-bold" style={{ color: p.texto }}>Rotina de Manutenção</h2>
+            <p className="text-[12px]" style={{ color: p.textoTerciario }}>
               {step === "login" ? "Bem-vindo de volta" : "Crie seu acesso"}
             </p>
           </div>
@@ -2184,7 +2212,7 @@ function LoginModal({ onLogin }) {
         {step === "cadastro" && (
           <div className="mb-3 flex gap-2">
             <div className="flex-1">
-              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Nome</label>
+              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>Nome</label>
               <input
                 type="text"
                 value={nome}
@@ -2195,7 +2223,7 @@ function LoginModal({ onLogin }) {
               />
             </div>
             <div className="flex-1">
-              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Sobrenome</label>
+              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>Sobrenome</label>
               <input
                 type="text"
                 value={sobrenome}
@@ -2211,7 +2239,7 @@ function LoginModal({ onLogin }) {
         {step === "login" && (
           <div className="mb-3 flex gap-2">
             <div className="flex-1">
-              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Nome</label>
+              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>Nome</label>
               <input
                 type="text"
                 value={nomeLogin}
@@ -2222,7 +2250,7 @@ function LoginModal({ onLogin }) {
               />
             </div>
             <div className="flex-1">
-              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Sobrenome</label>
+              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>Sobrenome</label>
               <input
                 type="text"
                 value={sobrenomeLogin}
@@ -2237,7 +2265,7 @@ function LoginModal({ onLogin }) {
 
         {/* PIN de senha */}
         <div className="mb-4">
-          <label className="mb-2 block text-[11px] font-medium uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>
+          <label className="mb-2 block text-[11px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>
             {step === "cadastro" ? "Criar senha (4 dígitos)" : "Senha (4 dígitos)"}
           </label>
           <div ref={senhaRef} className="flex justify-center gap-3">
@@ -2253,7 +2281,7 @@ function LoginModal({ onLogin }) {
                 className="h-12 w-12 rounded-xl text-center text-[20px] font-bold"
                 style={{
                   ...inputStyle,
-                  border: senha[idx] ? "1.5px solid rgba(245,166,35,0.6)" : "1px solid rgba(255,255,255,0.12)",
+                  border: senha[idx] ? `1.5px solid ${tema.accent}` : `1px solid ${p.bordaForte}`,
                 }}
               />
             ))}
@@ -2262,7 +2290,7 @@ function LoginModal({ onLogin }) {
 
         {step === "cadastro" && (
           <div className="mb-4">
-            <label className="mb-2 block text-[11px] font-medium uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>
+            <label className="mb-2 block text-[11px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>
               Confirmar senha
             </label>
             <div ref={confirmarRef} className="flex justify-center gap-3">
@@ -2278,7 +2306,7 @@ function LoginModal({ onLogin }) {
                   className="h-12 w-12 rounded-xl text-center text-[20px] font-bold"
                   style={{
                     ...inputStyle,
-                    border: confirmarSenha[idx] ? "1.5px solid rgba(245,166,35,0.6)" : "1px solid rgba(255,255,255,0.12)",
+                    border: confirmarSenha[idx] ? `1.5px solid ${tema.accent}` : `1px solid ${p.bordaForte}`,
                   }}
                 />
               ))}
@@ -2294,21 +2322,21 @@ function LoginModal({ onLogin }) {
           <span
             className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md transition-colors"
             style={{
-              background: salvarSenha ? "#F5A623" : "transparent",
-              border: salvarSenha ? "none" : "1.5px solid rgba(255,255,255,0.25)",
+              background: salvarSenha ? tema.accent : "transparent",
+              border: salvarSenha ? "none" : `1.5px solid ${p.bordaForte}`,
             }}
           >
-            {salvarSenha && <Check size={13} strokeWidth={3} color="#0E1116" />}
+            {salvarSenha && <Check size={13} strokeWidth={3} color="#FFFFFF" />}
           </span>
-          <span className="text-[12.5px]" style={{ color: "rgba(255,255,255,0.6)" }}>
+          <span className="text-[12.5px]" style={{ color: p.textoSecundario }}>
             Salvar acesso neste dispositivo
           </span>
         </button>
 
         {erro && (
-          <div className="mb-3 flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: "rgba(240,153,123,0.12)", border: "1px solid rgba(240,153,123,0.25)" }}>
-            <AlertTriangle size={13} color="#F0997B" />
-            <p className="text-[12px]" style={{ color: "#F0997B" }}>{erro}</p>
+          <div className="mb-3 flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: p.alertaSoft, border: `1px solid ${p.alerta}40` }}>
+            <AlertTriangle size={13} color={p.alerta} />
+            <p className="text-[12px]" style={{ color: p.alerta }}>{erro}</p>
           </div>
         )}
 
@@ -2317,8 +2345,8 @@ function LoginModal({ onLogin }) {
           disabled={carregando}
           className="mb-3 w-full rounded-2xl py-3.5 text-[14.5px] font-semibold transition-all active:scale-[0.98]"
           style={{
-            background: carregando ? "rgba(245,166,35,0.5)" : "linear-gradient(135deg, #F5A623, #E8940F)",
-            color: "#0E1116",
+            background: carregando ? tema.accentSoft : tema.gradient,
+            color: "#FFFFFF",
             opacity: carregando ? 0.8 : 1,
           }}
         >
@@ -2328,7 +2356,7 @@ function LoginModal({ onLogin }) {
         <button
           onClick={() => { setStep(step === "login" ? "cadastro" : "login"); setErro(""); setSenha(""); setConfirmarSenha(""); }}
           className="w-full py-2 text-[12.5px] text-center transition-colors"
-          style={{ color: "rgba(255,255,255,0.4)" }}
+          style={{ color: p.textoTerciario }}
         >
           {step === "login" ? "Primeiro acesso? Cadastrar" : "Já tenho acesso → Entrar"}
         </button>
@@ -2355,19 +2383,18 @@ function AreaCard({ area, status, onOpen, tema, p, fotoCount = 0 }) {
       style={{
         background: p.superficie,
         border: `1px solid ${isDone ? p.sucesso + "50" : p.borda}`,
-        boxShadow: ehClaro ? "0 1px 3px rgba(23,23,23,0.06), 0 1px 2px rgba(23,23,23,0.04)" : "none",
+        boxShadow: ehClaro
+          ? "0 1px 2px rgba(23,23,23,0.04), 0 4px 8px rgba(23,23,23,0.07), 0 8px 20px rgba(23,23,23,0.06)"
+          : "0 4px 14px rgba(0,0,0,0.28)",
       }}
     >
-      <div className="flex items-center gap-2.5 px-3 pt-3">
+      <div className="flex items-start justify-between gap-2 px-3 pt-3">
         <div
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
           style={{ background: isDone ? p.sucessoSoft : tema.accentSoft, color: corDestaque }}
         >
           <Icon size={16} strokeWidth={2} />
         </div>
-        <h3 className="min-w-0 flex-1 truncate text-[13.5px] font-semibold leading-tight" style={{ color: p.texto }}>
-          {area.nome}
-        </h3>
         {isDone && (
           <span className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full" style={{ background: p.sucesso }}>
             <Check size={10} strokeWidth={3.5} color="#FFFFFF" />
@@ -2375,7 +2402,21 @@ function AreaCard({ area, status, onOpen, tema, p, fotoCount = 0 }) {
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-2 px-3 pb-2.5 pt-2">
+      <h3
+        className="px-3 pb-1 pt-2 text-[13.5px] font-semibold leading-snug"
+        style={{
+          color: p.texto,
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+          minHeight: "34px",
+        }}
+      >
+        {area.nome}
+      </h3>
+
+      <div className="flex items-center justify-between gap-2 px-3 pb-2.5 pt-1">
         <span className="text-[11.5px] font-medium tabular-nums" style={{ color: p.textoSecundario }}>
           {checked}/{total}
         </span>
@@ -2404,30 +2445,30 @@ function AreaCard({ area, status, onOpen, tema, p, fotoCount = 0 }) {
 // COMPONENTE: card de um único equipamento estruturado (ex: Skid de TDI)
 // ----------------------------------------------------------------------------
 
-function CardEquipamento({ item, valores, onChangeValor, completo }) {
+function CardEquipamento({ item, valores, onChangeValor, completo, p }) {
   return (
     <div
       className="mb-3 flex flex-col gap-2.5 rounded-xl p-3.5"
       style={{
-        background: completo ? "rgba(61,220,132,0.08)" : "rgba(255,255,255,0.03)",
-        border: completo ? "1px solid rgba(61,220,132,0.25)" : "1px solid rgba(255,255,255,0.05)",
+        background: completo ? p.sucessoSoft : p.superficieAlt,
+        border: `1px solid ${completo ? p.sucesso + "40" : p.borda}`,
       }}
     >
       <div className="flex items-center gap-2">
         <span
           className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md"
           style={{
-            background: completo ? "#3DDC84" : "transparent",
-            border: completo ? "none" : "1.5px solid rgba(255,255,255,0.25)",
+            background: completo ? p.sucesso : "transparent",
+            border: completo ? "none" : `1.5px solid ${p.bordaForte}`,
           }}
         >
-          {completo && <Check size={13} strokeWidth={3} color="#0E1116" />}
+          {completo && <Check size={13} strokeWidth={3} color={p.textoInverso} />}
         </span>
-        <span className="text-[13.5px] font-medium leading-snug text-white">{item.label}</span>
+        <span className="text-[13.5px] font-medium leading-snug" style={{ color: p.texto }}>{item.label}</span>
       </div>
       <div className="flex flex-wrap gap-2 pl-7">
         {item.campos.map((campo) => (
-          <CampoInput key={campo.id} campo={campo} valor={valores[campo.id]} onChange={(v) => onChangeValor(campo.id, v)} />
+          <CampoInput key={campo.id} campo={campo} valor={valores[campo.id]} onChange={(v) => onChangeValor(campo.id, v)} p={p} />
         ))}
       </div>
     </div>
@@ -2438,10 +2479,10 @@ function CardEquipamento({ item, valores, onChangeValor, completo }) {
 // COMPONENTE: campo de input reutilizável (select de status ou número)
 // ----------------------------------------------------------------------------
 
-function CampoInput({ campo, valor, onChange }) {
+function CampoInput({ campo, valor, onChange, p }) {
   return (
     <div className="flex flex-1 flex-col gap-1" style={{ minWidth: "120px" }}>
-      <label className="text-[10.5px] font-medium uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>
+      <label className="text-[10.5px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>
         {campo.label}
       </label>
       {campo.tipo === "select" ? (
@@ -2449,11 +2490,11 @@ function CampoInput({ campo, valor, onChange }) {
           value={valor || ""}
           onChange={(e) => onChange(e.target.value)}
           className="rounded-lg px-2.5 py-2 text-[13px] outline-none"
-          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "white" }}
+          style={{ background: p.superficie, border: `1px solid ${p.bordaForte}`, color: p.texto }}
         >
           <option value="" disabled>Selecionar...</option>
           {campo.opcoes.map((op) => (
-            <option key={op} value={op} style={{ color: "#14171C" }}>{op}</option>
+            <option key={op} value={op}>{op}</option>
           ))}
         </select>
       ) : (
@@ -2467,21 +2508,21 @@ function CampoInput({ campo, valor, onChange }) {
               placeholder="0"
               className="w-full rounded-lg px-2.5 py-2 pr-9 text-[13px] outline-none"
               style={{
-                background: "rgba(255,255,255,0.06)",
+                background: p.superficie,
                 border: campo.recomendado && valor && parseFloat(valor) >= 40
-                  ? "1px solid rgba(240,153,123,0.5)"
-                  : "1px solid rgba(255,255,255,0.12)",
-                color: "white",
+                  ? `1px solid ${p.alerta}80`
+                  : `1px solid ${p.bordaForte}`,
+                color: p.texto,
               }}
             />
             {campo.unidade && (
-              <span className="pointer-events-none absolute right-2.5 text-[11.5px] font-medium" style={{ color: "rgba(255,255,255,0.4)" }}>
+              <span className="pointer-events-none absolute right-2.5 text-[11.5px] font-medium" style={{ color: p.textoTerciario }}>
                 {campo.unidade}
               </span>
             )}
           </div>
           {campo.recomendado && (
-            <span className="text-[9.5px]" style={{ color: "rgba(255,255,255,0.3)" }}>Recomendado: {campo.recomendado}</span>
+            <span className="text-[9.5px]" style={{ color: p.textoTerciario }}>Recomendado: {campo.recomendado}</span>
           )}
         </>
       )}
@@ -2493,7 +2534,7 @@ function CampoInput({ campo, valor, onChange }) {
 // COMPONENTE: sub-card colapsável para grupo de equipamentos (Bombas, Compressores...)
 // ----------------------------------------------------------------------------
 
-function SubCardGrupo({ grupo, itensDoGrupo, status, valores, area, onChangeValor, tema }) {
+function SubCardGrupo({ grupo, itensDoGrupo, status, valores, area, onChangeValor, tema, p }) {
   const [aberto, setAberto] = useState(false);
 
   const totalGrupo = itensDoGrupo.length;
@@ -2510,28 +2551,28 @@ function SubCardGrupo({ grupo, itensDoGrupo, status, valores, area, onChangeValo
     }
   });
 
-  const corStatus = (s) => s === "Operando" ? "#3DDC84" : s === "Manutenção" ? "#F0997B" : "rgba(255,255,255,0.4)";
+  const corStatus = (s) => s === "Operando" ? p.sucesso : s === "Manutenção" ? p.alerta : p.textoTerciario;
 
   return (
     <div
       className="mb-3 overflow-hidden rounded-xl"
       style={{
-        background: tudoCompleto ? "rgba(61,220,132,0.06)" : "rgba(255,255,255,0.03)",
-        border: tudoCompleto ? "1px solid rgba(61,220,132,0.2)" : "1px solid rgba(255,255,255,0.06)",
+        background: tudoCompleto ? p.sucessoSoft : p.superficieAlt,
+        border: `1px solid ${tudoCompleto ? p.sucesso + "35" : p.borda}`,
       }}
     >
       <button onClick={() => setAberto(!aberto)} className="flex w-full items-center justify-between gap-3 p-3.5 text-left">
         <div className="flex items-center gap-2.5">
           <span
             className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md"
-            style={{ background: tudoCompleto ? "#3DDC84" : "transparent", border: tudoCompleto ? "none" : "1.5px solid rgba(255,255,255,0.25)" }}
+            style={{ background: tudoCompleto ? p.sucesso : "transparent", border: tudoCompleto ? "none" : `1.5px solid ${p.bordaForte}` }}
           >
-            {tudoCompleto && <Check size={13} strokeWidth={3} color="#0E1116" />}
+            {tudoCompleto && <Check size={13} strokeWidth={3} color={p.textoInverso} />}
           </span>
           <div>
-            <p className="text-[13.5px] font-medium text-white">{grupo}</p>
+            <p className="text-[13.5px] font-medium" style={{ color: p.texto }}>{grupo}</p>
             <div className="mt-0.5 flex items-center gap-2">
-              <span className="text-[11.5px]" style={{ color: "rgba(255,255,255,0.4)" }}>
+              <span className="text-[11.5px]" style={{ color: p.textoTerciario }}>
                 {completosGrupo}/{totalGrupo} preenchidos
               </span>
               {Object.entries(resumoStatus).map(([s, n]) => (
@@ -2543,7 +2584,7 @@ function SubCardGrupo({ grupo, itensDoGrupo, status, valores, area, onChangeValo
             </div>
           </div>
         </div>
-        <ChevronLeft size={16} color="rgba(255,255,255,0.4)" style={{ transform: aberto ? "rotate(90deg)" : "rotate(-90deg)", transition: "transform 0.2s" }} />
+        <ChevronLeft size={16} color={p.textoTerciario} style={{ transform: aberto ? "rotate(90deg)" : "rotate(-90deg)", transition: "transform 0.2s" }} />
       </button>
 
       {aberto && (
@@ -2554,20 +2595,20 @@ function SubCardGrupo({ grupo, itensDoGrupo, status, valores, area, onChangeValo
               <div
                 key={idx}
                 className="flex flex-col gap-2 rounded-lg p-2.5"
-                style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)" }}
+                style={{ background: p.superficie, border: `1px solid ${p.borda}` }}
               >
                 <div className="flex items-center gap-2">
                   <span
                     className="flex h-4 w-4 shrink-0 items-center justify-center rounded"
-                    style={{ background: completo ? "#3DDC84" : "transparent", border: completo ? "none" : "1.5px solid rgba(255,255,255,0.25)" }}
+                    style={{ background: completo ? p.sucesso : "transparent", border: completo ? "none" : `1.5px solid ${p.bordaForte}` }}
                   >
-                    {completo && <Check size={10} strokeWidth={3} color="#0E1116" />}
+                    {completo && <Check size={10} strokeWidth={3} color={p.textoInverso} />}
                   </span>
-                  <span className="text-[12.5px] font-medium text-white">{item.label}</span>
+                  <span className="text-[12.5px] font-medium" style={{ color: p.texto }}>{item.label}</span>
                 </div>
                 <div className="flex flex-wrap gap-2 pl-6">
                   {item.campos.map((campo) => (
-                    <CampoInput key={campo.id} campo={campo} valor={valores[campo.id]} onChange={(v) => onChangeValor(area.id, campo.id, v)} />
+                    <CampoInput key={campo.id} campo={campo} valor={valores[campo.id]} onChange={(v) => onChangeValor(area.id, campo.id, v)} p={p} />
                   ))}
                 </div>
               </div>
@@ -2583,7 +2624,7 @@ function SubCardGrupo({ grupo, itensDoGrupo, status, valores, area, onChangeValo
 // COMPONENTE: modal de detalhe da área
 // ----------------------------------------------------------------------------
 
-function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChangeComentario, onSetAnomalia, onSave, tema, fotos, onAddFotos, onRemoveFoto }) {
+function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChangeComentario, onSetAnomalia, onSave, tema, p, fotos, onAddFotos, onRemoveFoto }) {
   const [showComment, setShowComment] = useState(
     status.comentario && status.comentario.trim().length > 0
   );
@@ -2653,14 +2694,14 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
   return (
     <div
       className="fixed inset-0 z-50 flex flex-col"
-      style={{ background: "rgba(8,10,13,0.72)", backdropFilter: "blur(4px)" }}
+      style={{ background: p.overlay, backdropFilter: "blur(4px)" }}
     >
       <div
         className="relative flex flex-col overflow-hidden rounded-3xl"
         style={{
-          background: "#181B21",
-          border: "1px solid rgba(255,255,255,0.08)",
-          boxShadow: "0 -8px 40px rgba(0,0,0,0.45)",
+          background: p.superficie,
+          border: `1px solid ${p.borda}`,
+          boxShadow: p === PALETA.claro ? "0 -8px 40px rgba(23,23,23,0.18)" : "0 -8px 40px rgba(0,0,0,0.45)",
           margin: "auto 12px",
           width: "calc(100% - 24px)",
           maxWidth: "480px",
@@ -2670,7 +2711,7 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
         {/* Header */}
         <div
           className="flex shrink-0 items-start justify-between gap-3 px-5 pb-4 pt-5"
-          style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+          style={{ borderBottom: `1px solid ${p.borda}` }}
         >
           <div className="flex items-center gap-3">
             <div
@@ -2682,17 +2723,17 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
             <div>
               <div
                 className="font-mono text-[11px] font-medium tracking-wider"
-                style={{ color: "rgba(255,255,255,0.4)" }}
+                style={{ color: p.textoTerciario }}
               >
                 ÁREA {area.id}
               </div>
-              <h2 className="text-[17px] font-semibold leading-tight text-white">{area.nome}</h2>
+              <h2 className="text-[17px] font-semibold leading-tight" style={{ color: p.texto }}>{area.nome}</h2>
             </div>
           </div>
           <button
             onClick={onClose}
             className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 transition-colors"
-            style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.75)" }}
+            style={{ background: p.superficieAlt, color: p.textoSecundario }}
           >
             <ChevronLeft size={16} />
             <span className="text-[12.5px] font-medium">Voltar</span>
@@ -2711,7 +2752,7 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
           }}
         >
           <div className="mb-4 flex items-center gap-2">
-            <div className="h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: p.superficieAlt }}>
               <div
                 className="h-full rounded-full transition-all duration-300"
                 style={{
@@ -2720,7 +2761,7 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
                 }}
               />
             </div>
-            <span className="shrink-0 text-[12px] font-medium" style={{ color: "rgba(255,255,255,0.5)" }}>
+            <span className="shrink-0 text-[12px] font-medium" style={{ color: p.textoSecundario }}>
               {checked}/{total}
             </span>
           </div>
@@ -2731,27 +2772,27 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
               onClick={handleToggleTodosSimples}
               className="mb-3 flex w-full items-start gap-3 rounded-xl p-3.5 text-left transition-colors"
               style={{
-                background: todosSimplesConcluidos ? "rgba(61,220,132,0.08)" : "rgba(255,255,255,0.03)",
-                border: todosSimplesConcluidos ? "1px solid rgba(61,220,132,0.25)" : "1px solid rgba(255,255,255,0.05)",
+                background: todosSimplesConcluidos ? p.sucessoSoft : p.superficieAlt,
+                border: `1px solid ${todosSimplesConcluidos ? p.sucesso + "40" : p.borda}`,
               }}
             >
               <span
                 className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md transition-colors"
                 style={{
-                  background: todosSimplesConcluidos ? "#3DDC84" : "transparent",
-                  border: todosSimplesConcluidos ? "none" : "1.5px solid rgba(255,255,255,0.25)",
+                  background: todosSimplesConcluidos ? p.sucesso : "transparent",
+                  border: todosSimplesConcluidos ? "none" : `1.5px solid ${p.bordaForte}`,
                 }}
               >
-                {todosSimplesConcluidos && <Check size={13} strokeWidth={3} color="#0E1116" />}
+                {todosSimplesConcluidos && <Check size={13} strokeWidth={3} color={p.textoInverso} />}
               </span>
               <div className="flex-1">
                 <p
                   className="text-[13.5px] font-medium leading-snug"
-                  style={{ color: todosSimplesConcluidos ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.9)" }}
+                  style={{ color: todosSimplesConcluidos ? p.textoSecundario : p.texto }}
                 >
                   Rotina de inspeção visual
                 </p>
-                <p className="mt-0.5 text-[12px] leading-snug" style={{ color: "rgba(255,255,255,0.4)" }}>
+                <p className="mt-0.5 text-[12px] leading-snug" style={{ color: p.textoTerciario }}>
                   {itensSimples.length === 1 ? itensSimples[0].texto : `${itensSimples.length} verificações — vazamentos, ruídos, fixações e condições gerais`}
                 </p>
               </div>
@@ -2767,6 +2808,7 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
               valores={valores}
               onChangeValor={(campoId, v) => onChangeValor(area.id, campoId, v)}
               completo={itemEstaCompleto(item, idx, status)}
+              p={p}
             />
           ))}
 
@@ -2781,6 +2823,7 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
               area={area}
               onChangeValor={onChangeValor}
               tema={tema}
+              p={p}
             />
           ))}
 
@@ -2801,7 +2844,7 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
               </button>
             ) : (
               <div className="flex flex-col gap-2">
-                <label className="text-[12px] font-medium" style={{ color: "rgba(255,255,255,0.5)" }}>
+                <label className="text-[12px] font-medium" style={{ color: p.textoSecundario }}>
                   Observações / comentários
                 </label>
                 <textarea
@@ -2818,9 +2861,9 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
                   rows={4}
                   className="w-full resize-none rounded-xl p-3 text-[13.5px] leading-relaxed outline-none"
                   style={{
-                    background: "rgba(255,255,255,0.04)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    color: "white",
+                    background: p.superficieAlt,
+                    border: `1px solid ${p.bordaForte}`,
+                    color: p.texto,
                   }}
                 />
                 {status.isAnomalia !== null && (
@@ -2828,8 +2871,8 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
                     onClick={() => setPerguntaAnomaliaAberta(true)}
                     className="flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium"
                     style={{
-                      background: status.isAnomalia ? "rgba(240,153,123,0.15)" : "rgba(255,255,255,0.06)",
-                      color: status.isAnomalia ? "#F0997B" : "rgba(255,255,255,0.5)",
+                      background: status.isAnomalia ? p.alertaSoft : p.superficieAlt,
+                      color: status.isAnomalia ? p.alerta : p.textoSecundario,
                     }}
                   >
                     {status.isAnomalia ? <AlertTriangle size={11} /> : <CheckCircle2 size={11} />}
@@ -2842,7 +2885,7 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
 
           {/* Fotos */}
           <div className="mt-5">
-            <label className="mb-2 block text-[12px] font-medium" style={{ color: "rgba(255,255,255,0.5)" }}>
+            <label className="mb-2 block text-[12px] font-medium" style={{ color: p.textoSecundario }}>
               Fotos desta área {minhasFotos.length > 0 ? `(${minhasFotos.length})` : ""}
             </label>
 
@@ -2852,7 +2895,7 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
                   <div
                     key={foto.id}
                     className="group relative aspect-square overflow-hidden rounded-xl"
-                    style={{ border: "1px solid rgba(255,255,255,0.1)" }}
+                    style={{ border: `1px solid ${p.borda}` }}
                   >
                     <img
                       src={foto.dataUrl}
@@ -2862,7 +2905,7 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
                     <button
                       onClick={() => onRemoveFoto(area.id, foto.id)}
                       className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full"
-                      style={{ background: "rgba(8,10,13,0.75)", color: "#F0997B" }}
+                      style={{ background: p.overlay, color: p.alerta }}
                     >
                       <Trash2 size={12} />
                     </button>
@@ -2888,9 +2931,9 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
                 onClick={() => fileInputRef.current && fileInputRef.current.click()}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-[13px] font-medium"
                 style={{
-                  background: "rgba(255,255,255,0.04)",
-                  color: "rgba(255,255,255,0.7)",
-                  border: "1px dashed rgba(255,255,255,0.18)",
+                  background: p.superficieAlt,
+                  color: p.textoSecundario,
+                  border: `1px dashed ${p.bordaForte}`,
                 }}
               >
                 <ImageIcon size={15} />
@@ -2920,14 +2963,14 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
         </div>
 
         {/* Footer fixo */}
-        <div className="shrink-0 px-5 pb-5 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+        <div className="shrink-0 px-5 pb-5 pt-3" style={{ borderTop: `1px solid ${p.borda}` }}>
           <button
             onClick={handleFinish}
             disabled={justFinished}
             className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-[14px] font-semibold transition-all active:scale-[0.98]"
             style={{
-              background: justFinished ? "#3DDC84" : tema.accent,
-              color: "#14171C",
+              background: justFinished ? p.sucesso : tema.accent,
+              color: "#FFFFFF",
             }}
           >
             {justFinished ? (
@@ -2942,7 +2985,7 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
               </>
             )}
           </button>
-          <p className="mt-2 text-center text-[11px]" style={{ color: "rgba(255,255,255,0.3)" }}>
+          <p className="mt-2 text-center text-[11px]" style={{ color: p.textoTerciario }}>
             Itens e observações já estão salvos automaticamente
           </p>
         </div>
@@ -2951,21 +2994,21 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
         {perguntaAnomaliaAberta && (
           <div
             className="absolute inset-0 z-10 flex items-center justify-center p-6"
-            style={{ background: "rgba(8,10,13,0.85)", backdropFilter: "blur(3px)" }}
+            style={{ background: p.overlay, backdropFilter: "blur(3px)" }}
           >
             <div
               className="w-full max-w-xs rounded-2xl p-5"
-              style={{ background: "#181B21", border: "1px solid rgba(255,255,255,0.1)" }}
+              style={{ background: p.superficie, border: `1px solid ${p.borda}`, boxShadow: p === PALETA.claro ? "0 12px 32px rgba(23,23,23,0.18)" : "none" }}
             >
               <div className="mb-3 flex justify-center">
                 <div
                   className="flex h-11 w-11 items-center justify-center rounded-2xl"
-                  style={{ background: "rgba(240,153,123,0.14)", color: "#F0997B" }}
+                  style={{ background: p.alertaSoft, color: p.alerta }}
                 >
                   <AlertTriangle size={20} />
                 </div>
               </div>
-              <p className="mb-4 text-center text-[13.5px] leading-snug text-white">
+              <p className="mb-4 text-center text-[13.5px] leading-snug" style={{ color: p.texto }}>
                 Essa observação representa uma anomalia?
               </p>
               <div className="flex gap-2">
@@ -2975,7 +3018,7 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
                     setPerguntaAnomaliaAberta(false);
                   }}
                   className="flex-1 rounded-xl py-2.5 text-[13px] font-medium"
-                  style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.75)" }}
+                  style={{ background: p.superficieAlt, color: p.textoSecundario }}
                 >
                   Não
                 </button>
@@ -3002,10 +3045,11 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
 // COMPONENTE: modal do relatório final
 // ----------------------------------------------------------------------------
 
-function ReportModal({ open, onClose, reportText, onSendWhatsapp, telefone, setTelefone, titulo = "Relatório da rotina", icone: Icone = FileText, corIcone = "#3DDC84" }) {
+function ReportModal({ open, onClose, reportText, onSendWhatsapp, telefone, setTelefone, titulo = "Relatório da rotina", icone: Icone = FileText, corIcone, p }) {
   const [copied, setCopied] = useState(false);
 
   if (!open) return null;
+  const corIconeFinal = corIcone || p.sucesso;
 
   const handleCopy = async () => {
     try {
@@ -3020,35 +3064,35 @@ function ReportModal({ open, onClose, reportText, onSendWhatsapp, telefone, setT
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
-      style={{ background: "rgba(8,10,13,0.75)", backdropFilter: "blur(4px)" }}
+      style={{ background: p.overlay, backdropFilter: "blur(4px)" }}
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         className="relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-3xl sm:max-w-lg sm:rounded-3xl"
         style={{
-          background: "#181B21",
-          border: "1px solid rgba(255,255,255,0.08)",
-          boxShadow: "0 -8px 40px rgba(0,0,0,0.5)",
+          background: p.superficie,
+          border: `1px solid ${p.borda}`,
+          boxShadow: p === PALETA.claro ? "0 -8px 40px rgba(23,23,23,0.2)" : "0 -8px 40px rgba(0,0,0,0.5)",
         }}
       >
         <div
           className="flex items-center justify-between px-5 pb-4 pt-5"
-          style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+          style={{ borderBottom: `1px solid ${p.borda}` }}
         >
           <div className="flex items-center gap-3">
             <div
               className="flex h-10 w-10 items-center justify-center rounded-xl"
-              style={{ background: `${corIcone}24`, color: corIcone }}
+              style={{ background: `${corIconeFinal}22`, color: corIconeFinal }}
             >
               <Icone size={18} />
             </div>
-            <h2 className="text-[16px] font-semibold text-white">{titulo}</h2>
+            <h2 className="text-[16px] font-semibold" style={{ color: p.texto }}>{titulo}</h2>
           </div>
           <button
             onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded-full"
-            style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)" }}
+            style={{ background: p.superficieAlt, color: p.textoSecundario }}
           >
             <X size={16} />
           </button>
@@ -3058,9 +3102,9 @@ function ReportModal({ open, onClose, reportText, onSendWhatsapp, telefone, setT
           <pre
             className="whitespace-pre-wrap rounded-xl p-4 text-[12.5px] leading-relaxed"
             style={{
-              background: "rgba(0,0,0,0.25)",
-              border: "1px solid rgba(255,255,255,0.06)",
-              color: "rgba(255,255,255,0.85)",
+              background: p.superficieAlt,
+              border: `1px solid ${p.borda}`,
+              color: p.textoSecundario,
               fontFamily: "ui-monospace, 'JetBrains Mono', monospace",
             }}
           >
@@ -3068,7 +3112,7 @@ function ReportModal({ open, onClose, reportText, onSendWhatsapp, telefone, setT
           </pre>
 
           <div className="mt-4">
-            <label className="mb-1.5 block text-[12px] font-medium" style={{ color: "rgba(255,255,255,0.5)" }}>
+            <label className="mb-1.5 block text-[12px] font-medium" style={{ color: p.textoSecundario }}>
               Número de WhatsApp (opcional — com DDD)
             </label>
             <input
@@ -3078,22 +3122,22 @@ function ReportModal({ open, onClose, reportText, onSendWhatsapp, telefone, setT
               placeholder="Ex: 31999998888"
               className="w-full rounded-xl p-3 text-[13.5px] outline-none"
               style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.1)",
-                color: "white",
+                background: p.superficieAlt,
+                border: `1px solid ${p.bordaForte}`,
+                color: p.texto,
               }}
             />
-            <p className="mt-1.5 text-[11px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+            <p className="mt-1.5 text-[11px]" style={{ color: p.textoTerciario }}>
               Deixe vazio para escolher o contato direto no WhatsApp.
             </p>
           </div>
         </div>
 
-        <div className="flex flex-col gap-2 px-5 pb-5 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+        <div className="flex flex-col gap-2 px-5 pb-5 pt-3" style={{ borderTop: `1px solid ${p.borda}` }}>
           <button
             onClick={onSendWhatsapp}
             className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-[14px] font-semibold transition-all active:scale-[0.98]"
-            style={{ background: "#3DDC84", color: "#0E1116" }}
+            style={{ background: p.sucesso, color: "#FFFFFF" }}
           >
             <Send size={16} strokeWidth={2.4} />
             Enviar pelo WhatsApp
@@ -3102,9 +3146,9 @@ function ReportModal({ open, onClose, reportText, onSendWhatsapp, telefone, setT
             onClick={handleCopy}
             className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-[13.5px] font-medium transition-all active:scale-[0.98]"
             style={{
-              background: "rgba(255,255,255,0.06)",
-              color: "rgba(255,255,255,0.85)",
-              border: "1px solid rgba(255,255,255,0.1)",
+              background: p.superficieAlt,
+              color: p.textoSecundario,
+              border: `1px solid ${p.bordaForte}`,
             }}
           >
             {copied ? <CheckCircle2 size={15} /> : <Download size={15} />}
@@ -3120,7 +3164,7 @@ function ReportModal({ open, onClose, reportText, onSendWhatsapp, telefone, setT
 // MODAL: RESUMO COM IA
 // ----------------------------------------------------------------------------
 
-function ResumoIaModal({ open, onClose, carregando, erro, texto, onTentarNovamente, telefone, setTelefone, avisoTruncado }) {
+function ResumoIaModal({ open, onClose, carregando, erro, texto, onTentarNovamente, telefone, setTelefone, avisoTruncado, p }) {
   if (!open) return null;
 
   // Enquanto carrega ou se deu erro, mostra um estado próprio (sem o corpo de texto do ReportModal)
@@ -3128,22 +3172,22 @@ function ResumoIaModal({ open, onClose, carregando, erro, texto, onTentarNovamen
     return (
       <div
         className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
-        style={{ background: "rgba(8,10,13,0.75)", backdropFilter: "blur(4px)" }}
+        style={{ background: p.overlay, backdropFilter: "blur(4px)" }}
         onClick={onClose}
       >
         <div
           onClick={(e) => e.stopPropagation()}
           className="relative flex w-full flex-col overflow-hidden rounded-t-3xl sm:max-w-lg sm:rounded-3xl"
-          style={{ background: "#181B21", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 -8px 40px rgba(0,0,0,0.5)" }}
+          style={{ background: p.superficie, border: `1px solid ${p.borda}`, boxShadow: p === PALETA.claro ? "0 -8px 40px rgba(23,23,23,0.2)" : "0 -8px 40px rgba(0,0,0,0.5)" }}
         >
-          <div className="flex items-center justify-between px-5 pb-4 pt-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div className="flex items-center justify-between px-5 pb-4 pt-5" style={{ borderBottom: `1px solid ${p.borda}` }}>
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: "rgba(45,212,191,0.14)", color: "#2DD4BF" }}>
                 <Zap size={18} />
               </div>
-              <h2 className="text-[16px] font-semibold text-white">Resumo com IA</h2>
+              <h2 className="text-[16px] font-semibold" style={{ color: p.texto }}>Resumo com IA</h2>
             </div>
-            <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)" }}>
+            <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: p.superficieAlt, color: p.textoSecundario }}>
               <X size={16} />
             </button>
           </div>
@@ -3155,19 +3199,19 @@ function ResumoIaModal({ open, onClose, carregando, erro, texto, onTentarNovamen
                   className="h-8 w-8 rounded-full border-2 border-t-transparent animate-spin"
                   style={{ borderColor: "rgba(45,212,191,0.25)", borderTopColor: "#2DD4BF" }}
                 />
-                <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.5)" }}>
+                <p className="text-[13px]" style={{ color: p.textoSecundario }}>
                   Analisando os dados da rotina...
                 </p>
               </>
             )}
             {!carregando && erro && (
               <>
-                <AlertTriangle size={28} color="#F0997B" />
-                <p className="text-[13px]" style={{ color: "#F0997B" }}>{erro}</p>
+                <AlertTriangle size={28} color={p.alerta} />
+                <p className="text-[13px]" style={{ color: p.alerta }}>{erro}</p>
                 <button
                   onClick={onTentarNovamente}
                   className="mt-2 rounded-xl px-4 py-2 text-[13px] font-medium"
-                  style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.8)" }}
+                  style={{ background: p.superficieAlt, color: p.textoSecundario }}
                 >
                   Tentar novamente
                 </button>
@@ -3193,7 +3237,7 @@ function ResumoIaModal({ open, onClose, carregando, erro, texto, onTentarNovamen
       {avisoTruncado && open && (
         <div
           className="fixed inset-x-0 z-[60] mx-auto flex max-w-lg items-center gap-2 rounded-2xl px-4 py-3"
-          style={{ top: "env(safe-area-inset-top, 12px)", left: 0, right: 0, marginTop: "12px", background: "rgba(240,153,123,0.95)", color: "#14171C" }}
+          style={{ top: "env(safe-area-inset-top, 12px)", left: 0, right: 0, marginTop: "12px", background: p.alerta, color: "#FFFFFF" }}
         >
           <AlertTriangle size={16} />
           <span className="text-[12.5px] font-medium">
@@ -3202,6 +3246,7 @@ function ResumoIaModal({ open, onClose, carregando, erro, texto, onTentarNovamen
         </div>
       )}
       <ReportModal
+        p={p}
         open={open}
         onClose={onClose}
         reportText={texto}
@@ -3869,7 +3914,7 @@ ${reportText}`;
       style={{ background: p.fundo, fontFamily: "'Inter', -apple-system, sans-serif" }}
     >
       {/* Modal de login */}
-      {!usuario && <LoginModal onLogin={(u) => setUsuario(u)} />}
+      {!usuario && <LoginModal onLogin={(u) => setUsuario(u)} p={p} tema={tema} />}
 
       {/* Menu lateral */}
       <MenuLateral
@@ -3879,6 +3924,7 @@ ${reportText}`;
         onNavegar={setPagina}
         usuario={usuario}
         tema={tema}
+        p={p}
         onSair={() => {
           localStorage.removeItem("usuario_sessao");
           setUsuario(null);
@@ -4019,6 +4065,9 @@ ${reportText}`;
             usuario={usuario}
             onAtualizarUsuario={setUsuario}
             tema={tema}
+            p={p}
+            modoTema={modoTema}
+            onMudarModoTema={setModoTema}
           />
         )}
         {pagina === "dashboard" && (
@@ -4028,6 +4077,7 @@ ${reportText}`;
             usuario={usuario}
             onEditarUsuario={(u) => setUsuarioEditando(u)}
             refreshKey={dashboardRefreshKey}
+            p={p}
           />
         )}
         {usuarioEditando && (
@@ -4045,6 +4095,7 @@ ${reportText}`;
               setDashboardRefreshKey((k) => k + 1);
             }}
             tema={tema}
+            p={p}
           />
         )}
         {pagina === "checklist" && (<>
@@ -4053,13 +4104,13 @@ ${reportText}`;
             <span
               className="flex items-center gap-1.5 text-[10.5px] font-medium"
               style={{
-                color: saveState === "error" ? "#F0997B" : saveState === "saving" ? "rgba(255,255,255,0.35)" : saveState === "saved" ? "#3DDC84" : "rgba(255,255,255,0.3)",
+                color: saveState === "error" ? p.alerta : saveState === "saving" ? p.textoTerciario : saveState === "saved" ? p.sucesso : p.textoTerciario,
               }}
             >
-              <span className="h-1.5 w-1.5 rounded-full" style={{ background: saveState === "error" ? "#E24B4A" : saveState === "saving" ? "rgba(255,255,255,0.35)" : saveState === "saved" ? "#3DDC84" : "rgba(255,255,255,0.25)" }} />
+              <span className="h-1.5 w-1.5 rounded-full" style={{ background: saveState === "error" ? "#E24B4A" : saveState === "saving" ? p.textoTerciario : saveState === "saved" ? p.sucesso : p.textoTerciario }} />
               {saveState === "error" ? "Falha ao salvar" : saveState === "saving" ? "Salvando..." : saveState === "saved" ? "Progresso salvo" : "Pronto"}
             </span>
-            <button onClick={() => setResetConfirm(true)} className="text-[10.5px] font-medium underline" style={{ color: "rgba(255,255,255,0.3)" }}>
+            <button onClick={() => setResetConfirm(true)} className="text-[10.5px] font-medium underline" style={{ color: p.textoTerciario }}>
               Reiniciar rotina
             </button>
           </div>
@@ -4067,16 +4118,16 @@ ${reportText}`;
           {/* Painel de progresso geral */}
           <div
             className="mb-5 flex items-center gap-4 rounded-2xl p-4"
-            style={{ background: "rgba(28,33,40,0.9)", border: "1px solid rgba(255,255,255,0.07)" }}
+            style={{ background: p.superficie, border: `1px solid ${p.borda}`, boxShadow: p === PALETA.claro ? "0 2px 8px rgba(23,23,23,0.06)" : "none" }}
           >
-            <ProgressRing progress={overallProgress} size={56} stroke={5} color={tema.accent} />
+            <ProgressRing progress={overallProgress} size={56} stroke={5} color={tema.accent} track={p === PALETA.claro ? "rgba(23,23,23,0.08)" : "rgba(255,255,255,0.08)"} />
             <div className="flex-1">
-              <div className="text-[18px] font-bold text-white">
+              <div className="text-[18px] font-bold" style={{ color: p.texto }}>
                 {totalChecked}/{TOTAL_ITENS}
-                <span className="ml-1.5 text-[12px] font-normal" style={{ color: "rgba(255,255,255,0.4)" }}>itens verificados</span>
+                <span className="ml-1.5 text-[12px] font-normal" style={{ color: p.textoTerciario }}>itens verificados</span>
               </div>
-              <div className="mt-1 flex gap-3 text-[11.5px]" style={{ color: "rgba(255,255,255,0.45)" }}>
-                <span className="flex items-center gap-1"><CheckCircle2 size={12} style={{ color: "#3DDC84" }} />{areasSalvas} áreas concluídas</span>
+              <div className="mt-1 flex gap-3 text-[11.5px]" style={{ color: p.textoSecundario }}>
+                <span className="flex items-center gap-1"><CheckCircle2 size={12} style={{ color: p.sucesso }} />{areasSalvas} áreas concluídas</span>
                 <span className="flex items-center gap-1"><MessageSquarePlus size={12} style={{ color: tema.accent }} />{areasComObservacao} c/ observações</span>
               </div>
             </div>
@@ -4086,7 +4137,7 @@ ${reportText}`;
         {AREAS.length === 0 ? (
           <div
             className="flex flex-col items-center gap-3 rounded-2xl px-6 py-12 text-center"
-            style={{ background: "rgba(28,33,40,0.9)", border: "1px dashed rgba(255,255,255,0.12)" }}
+            style={{ background: p.superficie, border: `1px dashed ${p.bordaForte}` }}
           >
             <div
               className="flex h-12 w-12 items-center justify-center rounded-2xl"
@@ -4095,14 +4146,14 @@ ${reportText}`;
               <Send size={22} strokeWidth={2} />
             </div>
             <div>
-              <h3 className="mb-1 text-[15px] font-semibold text-white">Checklist em construção</h3>
-              <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.5)" }}>
+              <h3 className="mb-1 text-[15px] font-semibold" style={{ color: p.texto }}>Checklist em construção</h3>
+              <p className="text-[13px]" style={{ color: p.textoSecundario }}>
                 A rotina de Start up ainda não tem itens cadastrados. Em breve.
               </p>
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             {AREAS.map((area) => (
               <AreaCard
                 key={area.id}
@@ -4130,9 +4181,9 @@ ${reportText}`;
             disabled={carregandoOntem}
             className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-[13px] font-medium shadow-lg transition-all active:scale-[0.98]"
             style={{
-              background: "rgba(28,33,40,0.97)",
-              color: carregandoOntem ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.55)",
-              border: "1px solid rgba(255,255,255,0.1)",
+              background: p.superficie,
+              color: carregandoOntem ? p.textoTerciario : p.textoSecundario,
+              border: `1px solid ${p.borda}`,
             }}
           >
             <Circle size={13} strokeWidth={2} />
@@ -4146,8 +4197,8 @@ ${reportText}`;
           className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-[13px] font-medium shadow-lg transition-all active:scale-[0.98]"
           style={{
             background: "rgba(45,212,191,0.1)",
-            color: "#2DD4BF",
-            border: "1px solid rgba(45,212,191,0.3)",
+            color: "#1F9A8A",
+            border: "1px solid rgba(45,212,191,0.35)",
           }}
         >
           <Zap size={14} strokeWidth={2.3} />
@@ -4160,7 +4211,7 @@ ${reportText}`;
             className="flex flex-1 items-center justify-center gap-2 rounded-2xl py-4 text-[14.5px] font-semibold shadow-2xl transition-all active:scale-[0.98] duration-300"
             style={{
               background: tema.gradient,
-              color: "#14171C",
+              color: "#FFFFFF",
               boxShadow: `0 8px 30px ${tema.glow}`,
             }}
           >
@@ -4172,9 +4223,9 @@ ${reportText}`;
             disabled={totalFotos === 0}
             className="flex items-center justify-center gap-2 rounded-2xl px-4 py-4 text-[14.5px] font-semibold shadow-2xl transition-all active:scale-[0.98] duration-300"
             style={{
-              background: totalFotos === 0 ? "rgba(255,255,255,0.06)" : "rgba(28,33,40,0.95)",
-              color: totalFotos === 0 ? "rgba(255,255,255,0.3)" : "white",
-              border: "1px solid rgba(255,255,255,0.12)",
+              background: totalFotos === 0 ? p.superficieAlt : p.superficie,
+              color: totalFotos === 0 ? p.textoTerciario : p.texto,
+              border: `1px solid ${p.bordaForte}`,
             }}
           >
             <ImageIcon size={17} strokeWidth={2.3} />
@@ -4196,6 +4247,7 @@ ${reportText}`;
           onSetAnomalia={changeAnomalia}
           onSave={saveArea}
           tema={tema}
+          p={p}
           fotos={fotosPorArea[openArea.id]}
           onAddFotos={addFotos}
           onRemoveFoto={removeFoto}
@@ -4209,6 +4261,7 @@ ${reportText}`;
         onSendWhatsapp={handleSendWhatsapp}
         telefone={telefone}
         setTelefone={setTelefone}
+        p={p}
       />
 
       {/* Modal relatório do dia anterior */}
@@ -4226,6 +4279,7 @@ ${reportText}`;
           }}
           telefone={telefone}
           setTelefone={setTelefone}
+          p={p}
         />
       )}
 
@@ -4240,38 +4294,39 @@ ${reportText}`;
         telefone={telefone}
         setTelefone={setTelefone}
         avisoTruncado={resumoIaAvisoTruncado}
+        p={p}
       />
 
       {resetConfirm && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center px-6"
-          style={{ background: "rgba(8,10,13,0.75)", backdropFilter: "blur(4px)" }}
+          style={{ background: p.overlay, backdropFilter: "blur(4px)" }}
           onClick={() => setResetConfirm(false)}
         >
           <div
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-sm rounded-2xl p-5"
-            style={{ background: "#181B21", border: "1px solid rgba(255,255,255,0.08)" }}
+            style={{ background: p.superficie, border: `1px solid ${p.borda}`, boxShadow: p === PALETA.claro ? "0 16px 48px rgba(23,23,23,0.2)" : "none" }}
           >
             <div className="mb-3 flex items-center gap-2.5">
               <div
                 className="flex h-9 w-9 items-center justify-center rounded-xl"
-                style={{ background: "rgba(226,75,74,0.14)", color: "#E24B4A" }}
+                style={{ background: p.alertaSoft, color: "#E24B4A" }}
               >
                 <AlertTriangle size={17} />
               </div>
-              <h3 className="text-[15px] font-semibold text-white">
+              <h3 className="text-[15px] font-semibold" style={{ color: p.texto }}>
                 Reiniciar rotina {rotinaAtual.label.toLowerCase()} de hoje?
               </h3>
             </div>
-            <p className="mb-4 text-[13px] leading-relaxed" style={{ color: "rgba(255,255,255,0.55)" }}>
+            <p className="mb-4 text-[13px] leading-relaxed" style={{ color: p.textoSecundario }}>
               Todos os itens marcados e observações de hoje na rotina <strong>{rotinaAtual.label.toLowerCase()}</strong> serão apagados. A outra rotina não é afetada. Essa ação não pode ser desfeita.
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setResetConfirm(false)}
                 className="flex-1 rounded-xl py-2.5 text-[13px] font-medium"
-                style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.8)" }}
+                style={{ background: p.superficieAlt, color: p.textoSecundario }}
               >
                 Cancelar
               </button>
