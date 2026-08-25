@@ -106,6 +106,7 @@ const Settings2 = makeIcon("Settings2");
 const Camera = makeIcon("Camera");
 const ImageIcon = makeIcon("Image");
 const Trash2 = makeIcon("Trash2");
+const PlusCircleIcon = makeIcon("PlusCircle");
 
 </script>
 <script type="text/babel" data-presets="react,env">
@@ -936,6 +937,14 @@ function chaveDoDia(d, tipoRotina) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `rotina:${tipoRotina}:${yyyy}-${mm}-${dd}`;
+}
+
+// Atividades não rotineiras são registradas por dia, independente da rotina (mecânica/elétrica) ativa
+function chaveAtividades(d) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `atividades:${yyyy}-${mm}-${dd}`;
 }
 
 function estadoInicial(areas) {
@@ -2624,6 +2633,302 @@ function SubCardGrupo({ grupo, itensDoGrupo, status, valores, area, onChangeValo
 // COMPONENTE: modal de detalhe da área
 // ----------------------------------------------------------------------------
 
+// ----------------------------------------------------------------------------
+// MODAL: ATIVIDADE NÃO ROTINEIRA
+// ----------------------------------------------------------------------------
+
+function ModalAtividadeNaoRotineira({ onClose, onConfirmar, tema, p, usuario }) {
+  const [descricao, setDescricao] = useState("");
+  const [fotos, setFotos] = useState([]);
+  const [enviandoFoto, setEnviandoFoto] = useState(false);
+  const [perguntaWhatsappAberta, setPerguntaWhatsappAberta] = useState(false);
+  const [isPreventiva, setIsPreventiva] = useState(false);
+  const [numeroOS, setNumeroOS] = useState("");
+  const [descricaoPreventiva, setDescricaoPreventiva] = useState("");
+  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleFilesSelected(e) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setEnviandoFoto(true);
+    const novas = await Promise.all(
+      files.map(async (file) => ({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        dataUrl: await fileToDataUrl(file),
+      }))
+    );
+    setFotos((prev) => [...prev, ...novas]);
+    setEnviandoFoto(false);
+    e.target.value = "";
+  }
+
+  function removeFoto(id) {
+    setFotos((prev) => prev.filter((f) => f.id !== id));
+  }
+
+  const podeConfirmar = isPreventiva
+    ? numeroOS.trim().length > 0 && descricaoPreventiva.trim().length > 0
+    : descricao.trim().length > 0;
+
+  function handleConfirmarClick() {
+    if (!podeConfirmar) return;
+    setPerguntaWhatsappAberta(true);
+  }
+
+  function finalizar(divulgarWhatsapp) {
+    onConfirmar({
+      descricao: descricao.trim(),
+      fotos,
+      preventiva: isPreventiva ? { numeroOS: numeroOS.trim(), descricao: descricaoPreventiva.trim() } : null,
+    }, divulgarWhatsapp);
+  }
+
+  const inputStyle = {
+    background: p.superficieAlt,
+    border: `1px solid ${p.bordaForte}`,
+    color: p.texto,
+    outline: "none",
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col"
+      style={{ background: p.overlay, backdropFilter: "blur(4px)" }}
+    >
+      <div
+        className="relative flex flex-col overflow-hidden rounded-3xl"
+        style={{
+          background: p.superficie,
+          border: `1px solid ${p.borda}`,
+          boxShadow: p === PALETA.claro ? "0 -8px 40px rgba(23,23,23,0.18)" : "0 -8px 40px rgba(0,0,0,0.45)",
+          margin: "auto 12px",
+          width: "calc(100% - 24px)",
+          maxWidth: "480px",
+          maxHeight: "calc(100% - 48px)",
+        }}
+      >
+        {/* Header */}
+        <div
+          className="flex shrink-0 items-center justify-between gap-3 px-5 pb-4 pt-5"
+          style={{ borderBottom: `1px solid ${p.borda}` }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+              style={{ background: tema.accentSoft, color: tema.accent }}
+            >
+              <ClipboardList size={20} strokeWidth={2} />
+            </div>
+            <h2 className="text-[16px] font-semibold leading-tight" style={{ color: p.texto }}>
+              Atividade não rotineira
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 transition-colors"
+            style={{ background: p.superficieAlt, color: p.textoSecundario }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Body scrollable */}
+        <div
+          className="px-5 py-4"
+          style={{ flex: "1 1 0%", minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}
+        >
+          {/* Switch: Preventiva */}
+          <div className="mb-4 rounded-xl p-3.5" style={{ background: p.superficieAlt, border: `1px solid ${p.borda}` }}>
+            <button
+              onClick={() => setIsPreventiva(!isPreventiva)}
+              className="flex w-full items-center justify-between gap-3"
+            >
+              <span className="text-[13.5px] font-medium" style={{ color: p.texto }}>
+                Preventiva
+              </span>
+              <span
+                className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200"
+                style={{ background: isPreventiva ? tema.accent : p.bordaForte }}
+              >
+                <span
+                  className="inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow transition-transform duration-200"
+                  style={{ transform: isPreventiva ? "translateX(22px)" : "translateX(3px)", height: "18px", width: "18px" }}
+                />
+              </span>
+            </button>
+
+            {isPreventiva && (
+              <div className="mt-3.5 flex flex-col gap-3">
+                <div>
+                  <label className="mb-1.5 block text-[11.5px] font-medium" style={{ color: p.textoSecundario }}>
+                    Número da O.S.
+                  </label>
+                  <input
+                    type="text"
+                    value={numeroOS}
+                    onChange={(e) => setNumeroOS(e.target.value)}
+                    placeholder="Ex: OS-2026-0451"
+                    className="w-full rounded-xl px-3 py-2.5 text-[13.5px] outline-none"
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[11.5px] font-medium" style={{ color: p.textoSecundario }}>
+                    O que foi feito na preventiva
+                  </label>
+                  <textarea
+                    value={descricaoPreventiva}
+                    onChange={(e) => setDescricaoPreventiva(e.target.value)}
+                    placeholder="Descreva o serviço realizado na preventiva..."
+                    rows={3}
+                    className="w-full resize-none rounded-xl p-3 text-[13.5px] leading-relaxed outline-none"
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Descrição da atividade — some quando Preventiva está ativa, pois os campos acima já cobrem o relato */}
+          {!isPreventiva && (
+            <>
+              <label className="mb-2 block text-[12px] font-medium" style={{ color: p.textoSecundario }}>
+                Descrição da atividade
+              </label>
+              <textarea
+                value={descricao}
+                onChange={(e) => setDescricao(e.target.value)}
+                placeholder="Descreva a atividade realizada durante o dia que não faz parte da rotina padrão..."
+                rows={5}
+                className="w-full resize-none rounded-xl p-3 text-[13.5px] leading-relaxed outline-none"
+                style={inputStyle}
+              />
+            </>
+          )}
+
+          {/* Fotos */}
+          <div className="mt-5">
+            <label className="mb-2 block text-[12px] font-medium" style={{ color: p.textoSecundario }}>
+              Fotos {fotos.length > 0 ? `(${fotos.length})` : ""}
+            </label>
+
+            {fotos.length > 0 && (
+              <div className="mb-3 grid grid-cols-3 gap-2">
+                {fotos.map((foto) => (
+                  <div
+                    key={foto.id}
+                    className="group relative aspect-square overflow-hidden rounded-xl"
+                    style={{ border: `1px solid ${p.borda}` }}
+                  >
+                    <img src={foto.dataUrl} alt="" className="h-full w-full object-cover" />
+                    <button
+                      onClick={() => removeFoto(foto.id)}
+                      className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full"
+                      style={{ background: p.overlay, color: p.alerta }}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => cameraInputRef.current && cameraInputRef.current.click()}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-[13px] font-medium"
+                style={{ background: tema.accentSoft2, color: tema.accent, border: `1px dashed ${tema.accentBorder}` }}
+              >
+                <Camera size={15} />
+                {enviandoFoto ? "Carregando..." : "Tirar foto"}
+              </button>
+              <button
+                onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-[13px] font-medium"
+                style={{ background: p.superficieAlt, color: p.textoSecundario, border: `1px dashed ${p.bordaForte}` }}
+              >
+                <ImageIcon size={15} />
+                Anexar
+              </button>
+            </div>
+
+            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={handleFilesSelected} />
+            <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFilesSelected} />
+          </div>
+        </div>
+
+        {/* Footer fixo */}
+        <div className="shrink-0 px-5 pb-5 pt-3" style={{ borderTop: `1px solid ${p.borda}` }}>
+          <button
+            onClick={handleConfirmarClick}
+            disabled={!podeConfirmar}
+            className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-[14px] font-semibold transition-all active:scale-[0.98]"
+            style={{
+              background: podeConfirmar ? tema.accent : p.superficieAlt,
+              color: podeConfirmar ? "#FFFFFF" : p.textoTerciario,
+            }}
+          >
+            <Check size={16} strokeWidth={2.4} />
+            Confirmar atividade
+          </button>
+        </div>
+
+        {/* Pop-up: divulgar no WhatsApp? */}
+        {perguntaWhatsappAberta && (
+          <div
+            className="absolute inset-0 z-10 flex items-center justify-center p-6"
+            style={{ background: p.overlay, backdropFilter: "blur(3px)" }}
+          >
+            <div
+              className="w-full max-w-xs rounded-2xl p-5"
+              style={{ background: p.superficie, border: `1px solid ${p.borda}`, boxShadow: p === PALETA.claro ? "0 12px 32px rgba(23,23,23,0.18)" : "none" }}
+            >
+              <div className="mb-3 flex justify-center">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ background: "rgba(45,196,102,0.14)", color: "#25A855" }}>
+                  <Send size={20} />
+                </div>
+              </div>
+              <p className="mb-1 text-center text-[13.5px] font-medium leading-snug" style={{ color: p.texto }}>
+                Deseja divulgar essa atividade no WhatsApp?
+              </p>
+              <p className="mb-4 text-center text-[12px] leading-snug" style={{ color: p.textoTerciario }}>
+                Se não, ela será incluída ao final do próximo relatório gerado.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => finalizar(false)}
+                  className="flex-1 rounded-xl py-2.5 text-[13px] font-medium"
+                  style={{ background: p.superficieAlt, color: p.textoSecundario }}
+                >
+                  Não
+                </button>
+                <button
+                  onClick={() => finalizar(true)}
+                  className="flex-1 rounded-xl py-2.5 text-[13px] font-semibold"
+                  style={{ background: "#25A855", color: "#FFFFFF" }}
+                >
+                  Sim
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChangeComentario, onSetAnomalia, onSave, tema, p, fotos, onAddFotos, onRemoveFoto }) {
   const [showComment, setShowComment] = useState(
     status.comentario && status.comentario.trim().length > 0
@@ -3185,7 +3490,7 @@ function ResumoIaModal({ open, onClose, carregando, erro, texto, onTentarNovamen
               <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: "rgba(45,212,191,0.14)", color: "#2DD4BF" }}>
                 <Zap size={18} />
               </div>
-              <h2 className="text-[16px] font-semibold" style={{ color: p.texto }}>Resumo com IA</h2>
+              <h2 className="text-[16px] font-semibold" style={{ color: p.texto }}>Relatório IA</h2>
             </div>
             <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: p.superficieAlt, color: p.textoSecundario }}>
               <X size={16} />
@@ -3253,7 +3558,7 @@ function ResumoIaModal({ open, onClose, carregando, erro, texto, onTentarNovamen
         onSendWhatsapp={enviarWhatsapp}
         telefone={telefone}
         setTelefone={setTelefone}
-        titulo="Resumo com IA"
+        titulo="Relatório IA"
         icone={Zap}
         corIcone="#2DD4BF"
       />
@@ -3495,6 +3800,58 @@ function MaintenanceApp() {
     [fotosPorArea]
   );
 
+  // ── Atividades não rotineiras ────────────────────────────────────────────
+  const chaveAtividadesHoje = useMemo(() => chaveAtividades(today), [today]);
+  const [atividadesNaoRotineiras, setAtividadesNaoRotineiras] = useState(() => {
+    try {
+      const raw = localStorage.getItem(chaveAtividadesHoje);
+      return raw ? JSON.parse(raw) : [];
+    } catch (_) {
+      return [];
+    }
+  });
+  const [atividadeModalOpen, setAtividadeModalOpen] = useState(false);
+  const [fabAtividadeExpandido, setFabAtividadeExpandido] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(chaveAtividadesHoje, JSON.stringify(atividadesNaoRotineiras));
+    } catch (_) {}
+  }, [atividadesNaoRotineiras, chaveAtividadesHoje]);
+
+  function adicionarAtividadeNaoRotineira(atividade) {
+    setAtividadesNaoRotineiras((prev) => [...prev, { ...atividade, id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, criadoEm: Date.now() }]);
+  }
+
+  function handleConfirmarAtividade(atividade, divulgarWhatsapp) {
+    // Sempre salva a atividade — mesmo divulgada no WhatsApp, ela deve constar no relatório do dia
+    adicionarAtividadeNaoRotineira(atividade);
+    setAtividadeModalOpen(false);
+
+    if (divulgarWhatsapp) {
+      const linhas = [];
+      linhas.push(atividade.preventiva ? "PREVENTIVA REALIZADA" : "ATIVIDADE NÃO ROTINEIRA");
+      linhas.push(`Data: ${formatarDataLonga(today)}`);
+      if (usuario) linhas.push(`Responsável: ${usuario.nome} ${usuario.sobrenome}`);
+      if (atividade.preventiva) linhas.push(`O.S.: ${atividade.preventiva.numeroOS}`);
+      linhas.push("");
+      if (atividade.descricao) {
+        linhas.push(atividade.descricao);
+      }
+      if (atividade.preventiva && atividade.preventiva.descricao) {
+        linhas.push("");
+        linhas.push(`Serviço realizado: ${atividade.preventiva.descricao}`);
+      }
+      if (atividade.fotos && atividade.fotos.length > 0) {
+        linhas.push("");
+        linhas.push(`(${atividade.fotos.length} foto${atividade.fotos.length > 1 ? "s" : ""} anexada${atividade.fotos.length > 1 ? "s" : ""} — envie manualmente junto com esta mensagem)`);
+      }
+      const texto = linhas.join("\n");
+      const encoded = encodeURIComponent(texto);
+      window.open(`https://wa.me/?text=${encoded}`, "_blank");
+    }
+  }
+
   // Toda vez que troca o tipo de rotina (ou no carregamento inicial), busca o progresso salvo dessa rotina/dia
   const loadedKeyRef = useRef(null);
   const [loadError, setLoadError] = useState(null);
@@ -3708,10 +4065,32 @@ function MaintenanceApp() {
       }
     });
 
+    if (atividadesNaoRotineiras.length > 0) {
+      linhas.push("");
+      linhas.push("—————————-");
+      linhas.push("Atividades Não Rotineiras realizadas");
+      linhas.push("");
+      atividadesNaoRotineiras.forEach((a, idx) => {
+        if (idx > 0) linhas.push("");
+        if (a.preventiva) {
+          linhas.push(`*Preventiva — O.S. ${a.preventiva.numeroOS}*`);
+        }
+        if (a.descricao) {
+          linhas.push(a.descricao);
+        }
+        if (a.preventiva && a.preventiva.descricao) {
+          linhas.push(`Serviço realizado: ${a.preventiva.descricao}`);
+        }
+        if (a.fotos && a.fotos.length > 0) {
+          linhas.push(`(${a.fotos.length} foto${a.fotos.length > 1 ? "s" : ""} anexada${a.fotos.length > 1 ? "s" : ""})`);
+        }
+      });
+    }
+
     linhas.push("");
     linhas.push(`Fim do relatório — gerado em ${formatarDataCurta(today)}`);
     return linhas.join("\n");
-  }, [status, today, totalChecked, AREAS, rotinaAtual, TOTAL_ITENS]);
+  }, [status, today, totalChecked, AREAS, rotinaAtual, TOTAL_ITENS, atividadesNaoRotineiras]);
 
   // Envia o relatório bruto para a IA resumir em um texto curto, corrido,
   // destacando o que fugiu do padrão e mencionando o resto de forma breve.
@@ -3722,16 +4101,37 @@ function MaintenanceApp() {
     setResumoIaTexto(null);
     setResumoIaAvisoTruncado(false);
     try {
-      const prompt = `Leia o relatório de manutenção abaixo e escreva um resumo em português, para ser lido no WhatsApp por um gestor. O técnico responsável foi ${usuario ? usuario.nome + " " + usuario.sobrenome : "um colaborador"}.
+      const nomeUsuario = usuario ? `${usuario.nome} ${usuario.sobrenome}` : "Colaborador";
 
-O resumo deve ter 2 a 3 parágrafos corridos (sem títulos, sem bullets, sem markdown, sem emojis), cobrindo:
-1º parágrafo: cite rapidamente quais áreas/rotinas foram verificadas no geral.
-2º parágrafo: destaque especificamente qualquer observação, comentário ou valor fora do padrão que aparece no relatório (equipamento em manutenção, parado, temperatura ou pressão fora do esperado, vazamento, etc). Se não houver nada fora do padrão, diga isso claramente em uma frase.
-3º parágrafo (opcional): uma linha de fechamento breve sobre o estado geral da rotina.
+      // Lista de "Área: checked/total" para a IA não precisar recalcular nada — só reproduzir.
+      const areasComProgresso = AREAS.map((area) => {
+        const s = status[area.id] || { checkedItems: [], valores: {} };
+        const checked = area.itens.filter((item, idx) => itemEstaCompleto(item, idx, s)).length;
+        return `${area.nome}: ${checked}/${area.itens.length}`;
+      }).join("\n");
 
-Sua resposta deve conter SOMENTE o texto final do resumo, pronto para ser copiado e colado — nada de comentários sobre como você seguiu as instruções, nada de listas de verificação, nada de texto entre asteriscos.
+      const prompt = `Você vai transformar o relatório bruto de uma rotina de manutenção industrial em uma versão curta e objetiva para WhatsApp, seguindo EXATAMENTE esta estrutura, nesta ordem:
 
-Relatório:
+Relatório diário de manutenção
+${nomeUsuario}
+
+Áreas verificadas:
+(uma linha por área, no formato "Nome da área: x/y", reproduzindo exatamente os números abaixo — não recalcule)
+${areasComProgresso}
+
+Observações e anomalias:
+(texto corrido curto e objetivo — 1 a 3 frases citando especificamente qualquer observação, comentário ou valor fora do padrão presente no relatório bruto: equipamento parado ou em manutenção, temperatura/pressão fora do esperado, vazamento, atividade não rotineira registrada, etc. Se não houver nada digno de nota, escreva apenas: "Nenhuma anomalia identificada.")
+
+Equipamentos verificados:
+(uma linha por equipamento que tenha dado numérico ou status registrado no relatório bruto, no formato "→ Nome do equipamento: dado1, dado2". Use exatamente os valores do relatório bruto, sem inventar nada. Se nenhum equipamento tiver dado registrado, omita esta seção inteira, incluindo o título.)
+
+Regras estritas:
+- Cabeçalho de "Relatório diário de manutenção" até a lista de áreas deve ser enxuto, sem frases de introdução.
+- Não use markdown (sem **negrito**, sem #), não use emojis.
+- Cada linha de equipamento DEVE começar com "→ " (seta e espaço), nunca com "-", "*" ou "•".
+- Sua resposta deve conter SOMENTE o texto final pronto para copiar e colar — nada de comentários sobre como você seguiu as instruções, nada de explicações extras.
+
+Relatório bruto (fonte de todos os dados, incluindo observações e valores de equipamentos):
 ${reportText}`;
 
       const response = await fetch(`${SUPA_URL}/functions/v1/resumo-ia`, {
@@ -4174,6 +4574,56 @@ ${reportText}`;
       {pagina === "checklist" && (
       <div className="fixed inset-x-0 bottom-0 z-40 mx-auto flex max-w-md flex-col gap-2 px-4 pb-5">
 
+        <div className="flex gap-2">
+          <button
+            onClick={() => setReportOpen(true)}
+            className="flex flex-1 items-center justify-center gap-2 rounded-2xl py-4 text-[14px] font-semibold shadow-2xl transition-all active:scale-[0.98] duration-300"
+            style={{
+              background: tema.gradient,
+              color: "#FFFFFF",
+              boxShadow: `0 8px 30px ${tema.glow}`,
+            }}
+          >
+            <FileText size={18} strokeWidth={2.3} />
+            Relatório de texto
+          </button>
+
+          <button
+            onClick={gerarResumoIA}
+            className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-2xl shadow-lg transition-all active:scale-[0.98]"
+            style={{
+              background: "rgba(45,212,191,0.1)",
+              color: "#1F9A8A",
+              border: "1px solid rgba(45,212,191,0.35)",
+            }}
+            title="Relatório IA"
+          >
+            <Zap size={20} strokeWidth={2.3} />
+          </button>
+
+          <button
+            onClick={abrirRelatorioFotos}
+            disabled={totalFotos === 0}
+            className="relative flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-2xl shadow-2xl transition-all active:scale-[0.98] duration-300"
+            style={{
+              background: totalFotos === 0 ? p.superficieAlt : p.superficie,
+              color: totalFotos === 0 ? p.textoTerciario : p.texto,
+              border: `1px solid ${p.bordaForte}`,
+            }}
+            title="Relatório de fotos"
+          >
+            <ImageIcon size={20} strokeWidth={2.3} />
+            {totalFotos > 0 && (
+              <span
+                className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10.5px] font-bold"
+                style={{ background: tema.accent, color: "#FFFFFF" }}
+              >
+                {totalFotos}
+              </span>
+            )}
+          </button>
+        </div>
+
         {/* Botão "Ontem" — aparece sempre (carregando ou com dados) */}
         {(carregandoOntem || reportTextOntem) && (
           <button
@@ -4190,49 +4640,51 @@ ${reportText}`;
             {carregandoOntem ? "Buscando relatório de ontem..." : "Ver relatório de ontem (todos os usuários)"}
           </button>
         )}
-
-        {/* Botão "Resumo com IA" */}
-        <button
-          onClick={gerarResumoIA}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-[13px] font-medium shadow-lg transition-all active:scale-[0.98]"
-          style={{
-            background: "rgba(45,212,191,0.1)",
-            color: "#1F9A8A",
-            border: "1px solid rgba(45,212,191,0.35)",
-          }}
-        >
-          <Zap size={14} strokeWidth={2.3} />
-          Resumo com IA
-        </button>
-
-        <div className="flex gap-2">
-          <button
-            onClick={() => setReportOpen(true)}
-            className="flex flex-1 items-center justify-center gap-2 rounded-2xl py-4 text-[14.5px] font-semibold shadow-2xl transition-all active:scale-[0.98] duration-300"
-            style={{
-              background: tema.gradient,
-              color: "#FFFFFF",
-              boxShadow: `0 8px 30px ${tema.glow}`,
-            }}
-          >
-            <FileText size={17} strokeWidth={2.3} />
-            Relatório de texto
-          </button>
-          <button
-            onClick={abrirRelatorioFotos}
-            disabled={totalFotos === 0}
-            className="flex items-center justify-center gap-2 rounded-2xl px-4 py-4 text-[14.5px] font-semibold shadow-2xl transition-all active:scale-[0.98] duration-300"
-            style={{
-              background: totalFotos === 0 ? p.superficieAlt : p.superficie,
-              color: totalFotos === 0 ? p.textoTerciario : p.texto,
-              border: `1px solid ${p.bordaForte}`,
-            }}
-          >
-            <ImageIcon size={17} strokeWidth={2.3} />
-            {totalFotos > 0 ? totalFotos : ""}
-          </button>
-        </div>
       </div>
+      )}
+
+      {/* Botão flutuante (FAB) — Adicionar Atividade não Rotineira */}
+      {pagina === "checklist" && (
+        <>
+          {/* Overlay invisível: toque fora recolhe o FAB sem abrir o modal */}
+          {fabAtividadeExpandido && (
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setFabAtividadeExpandido(false)}
+            />
+          )}
+          <button
+            onClick={() => {
+              if (fabAtividadeExpandido) {
+                setAtividadeModalOpen(true);
+                setFabAtividadeExpandido(false);
+              } else {
+                setFabAtividadeExpandido(true);
+              }
+            }}
+            className="fixed z-50 flex items-center gap-2 overflow-hidden rounded-full shadow-2xl transition-all duration-300 ease-out active:scale-[0.96]"
+            style={{
+              right: "16px",
+              bottom: "168px",
+              height: "56px",
+              width: fabAtividadeExpandido ? "auto" : "56px",
+              paddingLeft: fabAtividadeExpandido ? "20px" : "0",
+              paddingRight: fabAtividadeExpandido ? "22px" : "0",
+              background: "linear-gradient(135deg, #D97706, #B45309)",
+              boxShadow: "0 10px 28px rgba(217,119,6,0.45)",
+            }}
+          >
+            <span className="flex h-full shrink-0 items-center justify-center" style={{ width: "56px", marginLeft: fabAtividadeExpandido ? "-20px" : "0" }}>
+              <PlusCircleIcon size={24} strokeWidth={2.3} color="#FFFFFF" />
+            </span>
+            <span
+              className="whitespace-nowrap text-[14px] font-semibold text-white transition-opacity duration-200"
+              style={{ opacity: fabAtividadeExpandido ? 1 : 0, display: fabAtividadeExpandido ? "inline" : "none" }}
+            >
+              Adicionar Atividade não Rotineira
+            </span>
+          </button>
+        </>
       )}
 
       {/* Modais */}
@@ -4296,6 +4748,17 @@ ${reportText}`;
         avisoTruncado={resumoIaAvisoTruncado}
         p={p}
       />
+
+      {/* Modal de atividade não rotineira */}
+      {atividadeModalOpen && (
+        <ModalAtividadeNaoRotineira
+          onClose={() => setAtividadeModalOpen(false)}
+          onConfirmar={handleConfirmarAtividade}
+          tema={tema}
+          p={p}
+          usuario={usuario}
+        />
+      )}
 
       {resetConfirm && (
         <div
