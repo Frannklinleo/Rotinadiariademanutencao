@@ -145,6 +145,22 @@ async function supaGetUsuario(nome, sobrenome) {
   return rows && rows.length > 0 ? rows[0] : null;
 }
 
+// Busca usuário pelo login (case-insensitive) — usado no novo fluxo de entrada
+async function supaGetUsuarioPorLogin(login) {
+  const rows = await supaFetch(
+    `/usuarios?login=ilike.${encodeURIComponent(login.trim())}&limit=1`
+  );
+  return rows && rows.length > 0 ? rows[0] : null;
+}
+
+// Busca usuário pelo e-mail (case-insensitive) — usado na recuperação de senha
+async function supaGetUsuarioPorEmail(email) {
+  const rows = await supaFetch(
+    `/usuarios?email=ilike.${encodeURIComponent(email.trim())}&limit=1`
+  );
+  return rows && rows.length > 0 ? rows[0] : null;
+}
+
 // Verifica se um usuário ainda existe no banco pelo id (usado para detectar
 // sessões "órfãs" — quando o banco foi resetado mas o celular ainda guarda o id antigo)
 async function supaVerificarUsuarioExiste(id) {
@@ -158,12 +174,44 @@ async function supaVerificarUsuarioExiste(id) {
 }
 
 // Cria usuário novo, retorna o registro criado
-async function supaCreateUsuario(nome, sobrenome, senha) {
+async function supaCreateUsuario(nome, sobrenome, login, senha, email) {
   const rows = await supaFetch("/usuarios", {
     method: "POST",
-    body: JSON.stringify({ nome, sobrenome, senha }),
+    body: JSON.stringify({ nome, sobrenome, login, senha, email }),
   });
   return rows && rows.length > 0 ? rows[0] : null;
+}
+
+// ── Recuperação de senha via e-mail real (usa o Supabase Auth só para o envio) ──
+// Cada usuário do nosso sistema de PIN customizado também ganha uma conta "espelho"
+// no Supabase Auth (mesmo e-mail, senha aleatória interna) só para poder receber
+// o e-mail de redefinição pronto do Supabase. O PIN do nosso app é sempre o que vale.
+async function supaEnviarEmailRecuperacao(email) {
+  const res = await fetch(`${SUPA_URL}/auth/v1/recover`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "apikey": SUPA_KEY },
+    body: JSON.stringify({ email: email.trim() }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Falha ao enviar e-mail (${res.status}): ${err}`);
+  }
+  return true;
+}
+
+// Garante que existe uma conta espelho no Supabase Auth para esse e-mail
+// (necessário para o /auth/v1/recover conseguir encontrar alguém a quem mandar o e-mail)
+async function supaGarantirContaAuth(email, senhaInterna) {
+  try {
+    await fetch(`${SUPA_URL}/auth/v1/signup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": SUPA_KEY },
+      body: JSON.stringify({ email: email.trim(), password: senhaInterna }),
+    });
+  } catch (_) {
+    // Falha aqui não deve travar o cadastro principal — a recuperação de senha
+    // é um recurso adicional, não o cadastro em si.
+  }
 }
 
 // Upsert de um registro de área (por usuario_id + tipo_rotina + data + area_id)
@@ -2051,20 +2099,22 @@ function TelaDashboard({ tema, today, usuario, onEditarUsuario, refreshKey, p })
 // LOGIN MODAL
 // ----------------------------------------------------------------------------
 
-function LoginModal({ onLogin, p, tema }) {
-  const [step, setStep] = useState("login"); // "login" | "cadastro"
+function LoginModal({ onLogin, p, tema, precisaRecadastrar }) {
+  const [step, setStep] = useState(precisaRecadastrar ? "cadastro" : "login"); // "login" | "cadastro" | "recuperar"
   // Cadastro
   const [nome, setNome] = useState("");
   const [sobrenome, setSobrenome] = useState("");
+  const [loginCadastro, setLoginCadastro] = useState("");
+  const [emailCadastro, setEmailCadastro] = useState("");
   // Login
-  const [nomeLogin, setNomeLogin] = useState(() => {
+  const [loginEntrada, setLoginEntrada] = useState(() => {
     const salvo = JSON.parse(localStorage.getItem("usuario_rotina") || "null");
-    return salvo ? salvo.nome || "" : "";
+    return salvo ? salvo.login || "" : "";
   });
-  const [sobrenomeLogin, setSobrenomeLogin] = useState(() => {
-    const salvo = JSON.parse(localStorage.getItem("usuario_rotina") || "null");
-    return salvo ? salvo.sobrenome || "" : "";
-  });
+  // Recuperação de senha
+  const [emailRecuperacao, setEmailRecuperacao] = useState("");
+  const [recuperacaoEnviada, setRecuperacaoEnviada] = useState(false);
+
   const [senha, setSenha] = useState("");
   const [confirmarSenha, setConfirmarSenha] = useState("");
   const [salvarSenha, setSalvarSenha] = useState(true);
@@ -2105,10 +2155,9 @@ function LoginModal({ onLogin, p, tema }) {
     }
   }
 
-  function handleKeyDownSenha(idx, e, isCadastro) {
+  function handleKeyDownSenha(idx, e) {
     if (e.key === "Backspace" && !senha[idx] && idx > 0) {
-      const container = isCadastro ? senhaRef.current : senhaRef.current;
-      const prev = container.querySelectorAll("input")[idx - 1];
+      const prev = senhaRef.current.querySelectorAll("input")[idx - 1];
       if (prev) { prev.focus(); const arr = senha.split(""); arr[idx - 1] = ""; setSenha(arr.join("")); }
     }
   }
@@ -2122,29 +2171,36 @@ function LoginModal({ onLogin, p, tema }) {
 
   async function entrar() {
     setErro("");
+    if (!loginEntrada.trim()) { setErro("Digite seu login."); return; }
     setCarregando(true);
     try {
-      // Tenta buscar no Supabase primeiro
       let usuarioDb = null;
-      try { usuarioDb = await supaGetUsuario(nomeLogin, sobrenomeLogin); } catch (_) {}
+      let erroBuscaSupabase = null;
+      try {
+        usuarioDb = await supaGetUsuarioPorLogin(loginEntrada);
+      } catch (eBusca) {
+        erroBuscaSupabase = eBusca;
+        console.error("Falha ao buscar usuário no Supabase:", eBusca);
+      }
 
       if (usuarioDb) {
         if (senha !== usuarioDb.senha) { setErro("Senha incorreta."); setSenha(""); setCarregando(false); return; }
-        const dadosUsuario = { id: usuarioDb.id, nome: usuarioDb.nome, sobrenome: usuarioDb.sobrenome, foto_url: usuarioDb.foto_url || null, role: usuarioDb.role || "user" };
-        // Salva cache local para auto-login e offline
+        const dadosUsuario = {
+          id: usuarioDb.id, nome: usuarioDb.nome, sobrenome: usuarioDb.sobrenome,
+          login: usuarioDb.login, email: usuarioDb.email || null,
+          foto_url: usuarioDb.foto_url || null, role: usuarioDb.role || "user",
+        };
         localStorage.setItem("usuario_rotina", JSON.stringify({ ...dadosUsuario, senha }));
         if (salvarSenha) localStorage.setItem("usuario_sessao", JSON.stringify(dadosUsuario));
         confirmar(dadosUsuario);
+      } else if (erroBuscaSupabase) {
+        setErro(`Não foi possível conectar ao servidor (${erroBuscaSupabase.message || "erro desconhecido"}). Verifique sua internet e tente novamente.`);
+        setCarregando(false);
+        return;
       } else {
-        // Fallback offline
-        const salvo = JSON.parse(localStorage.getItem("usuario_rotina") || "null");
-        if (!salvo) { setErro("Usuário não encontrado. Verifique o nome ou faça o cadastro."); setCarregando(false); return; }
-        if (salvo.nome.toLowerCase() !== nomeLogin.toLowerCase() || salvo.sobrenome.toLowerCase() !== sobrenomeLogin.toLowerCase()) {
-          setErro("Usuário não encontrado."); setCarregando(false); return;
-        }
-        if (senha !== salvo.senha) { setErro("Senha incorreta."); setSenha(""); setCarregando(false); return; }
-        if (salvarSenha) localStorage.setItem("usuario_sessao", JSON.stringify(salvo));
-        confirmar(salvo);
+        setErro("Login não encontrado. Verifique ou faça o cadastro.");
+        setCarregando(false);
+        return;
       }
     } catch (e) {
       setErro("Erro de conexão. Verifique sua internet.");
@@ -2155,27 +2211,72 @@ function LoginModal({ onLogin, p, tema }) {
   async function cadastrar() {
     setErro("");
     if (!nome.trim() || !sobrenome.trim()) { setErro("Preencha nome e sobrenome."); return; }
+    if (!loginCadastro.trim()) { setErro("Escolha um login."); return; }
+    if (!/^[a-zA-Z0-9._-]{3,}$/.test(loginCadastro.trim())) { setErro("O login deve ter ao menos 3 caracteres (letras, números, ponto, hífen)."); return; }
+    if (!emailCadastro.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailCadastro.trim())) { setErro("Digite um e-mail válido — ele será usado para recuperar sua senha."); return; }
     if (senha.length !== 4) { setErro("A senha deve ter 4 dígitos."); return; }
     if (senha !== confirmarSenha) { setErro("As senhas não coincidem."); return; }
     setCarregando(true);
     try {
-      // Verifica se usuário já existe
-      let existe = null;
-      try { existe = await supaGetUsuario(nome.trim(), sobrenome.trim()); } catch (_) {}
-      if (existe) { setErro("Já existe um usuário com este nome. Faça login."); setCarregando(false); return; }
+      let loginExiste = null;
+      try { loginExiste = await supaGetUsuarioPorLogin(loginCadastro.trim()); } catch (eBusca) {
+        console.error("Falha ao verificar login existente:", eBusca);
+      }
+      if (loginExiste) { setErro("Esse login já está em uso. Escolha outro."); setCarregando(false); return; }
 
       let novoUsuario = null;
-      try { novoUsuario = await supaCreateUsuario(nome.trim(), sobrenome.trim(), senha); } catch (_) {}
+      let erroCadastroSupabase = null;
+      try {
+        novoUsuario = await supaCreateUsuario(nome.trim(), sobrenome.trim(), loginCadastro.trim(), senha, emailCadastro.trim());
+      } catch (eCriacao) {
+        erroCadastroSupabase = eCriacao;
+        console.error("Falha ao criar usuário no Supabase:", eCriacao);
+      }
 
-      const dadosUsuario = novoUsuario
-        ? { id: novoUsuario.id, nome: novoUsuario.nome, sobrenome: novoUsuario.sobrenome, foto_url: novoUsuario.foto_url || null, role: novoUsuario.role || "user" }
-        : { id: null, nome: nome.trim(), sobrenome: sobrenome.trim(), foto_url: null, role: "user" };
+      if (!novoUsuario) {
+        const detalhe = erroCadastroSupabase && erroCadastroSupabase.message ? erroCadastroSupabase.message : "erro desconhecido";
+        setErro(`Não foi possível salvar seu cadastro no servidor (${detalhe}). Verifique sua internet e tente novamente.`);
+        setCarregando(false);
+        return;
+      }
 
+      // Cria a conta espelho no Supabase Auth para viabilizar a recuperação de senha por e-mail
+      // (senha interna aleatória — o PIN do nosso sistema é sempre o que o usuário realmente usa)
+      const senhaInternaAuth = `Rm${novoUsuario.id.replace(/-/g, "").slice(0, 20)}!`;
+      supaGarantirContaAuth(emailCadastro.trim(), senhaInternaAuth).catch(() => {});
+
+      const dadosUsuario = {
+        id: novoUsuario.id, nome: novoUsuario.nome, sobrenome: novoUsuario.sobrenome,
+        login: novoUsuario.login, email: novoUsuario.email || null,
+        foto_url: novoUsuario.foto_url || null, role: novoUsuario.role || "user",
+      };
       localStorage.setItem("usuario_rotina", JSON.stringify({ ...dadosUsuario, senha }));
       if (salvarSenha) localStorage.setItem("usuario_sessao", JSON.stringify(dadosUsuario));
       confirmar(dadosUsuario);
     } catch (e) {
       setErro("Erro ao cadastrar. Verifique sua conexão.");
+    }
+    setCarregando(false);
+  }
+
+  async function enviarRecuperacao() {
+    setErro("");
+    if (!emailRecuperacao.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRecuperacao.trim())) {
+      setErro("Digite um e-mail válido.");
+      return;
+    }
+    setCarregando(true);
+    try {
+      const usuarioDb = await supaGetUsuarioPorEmail(emailRecuperacao.trim());
+      if (!usuarioDb) {
+        setErro("Não encontramos nenhum cadastro com esse e-mail.");
+        setCarregando(false);
+        return;
+      }
+      await supaEnviarEmailRecuperacao(emailRecuperacao.trim());
+      setRecuperacaoEnviada(true);
+    } catch (e) {
+      setErro(`Não foi possível enviar o e-mail (${e && e.message ? e.message : "erro desconhecido"}). Tente novamente.`);
     }
     setCarregando(false);
   }
@@ -2213,62 +2314,143 @@ function LoginModal({ onLogin, p, tema }) {
           <div className="text-center">
             <h2 className="text-[17px] font-bold" style={{ color: p.texto }}>Rotina de Manutenção</h2>
             <p className="text-[12px]" style={{ color: p.textoTerciario }}>
-              {step === "login" ? "Bem-vindo de volta" : "Crie seu acesso"}
+              {step === "login" ? "Bem-vindo de volta" : step === "recuperar" ? "Recuperar senha" : "Crie seu acesso"}
             </p>
           </div>
         </div>
 
-        {step === "cadastro" && (
-          <div className="mb-3 flex gap-2">
-            <div className="flex-1">
-              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>Nome</label>
-              <input
-                type="text"
-                value={nome}
-                onChange={(e) => setNome(e.target.value)}
-                placeholder="Leonardo"
-                className="w-full rounded-xl px-3 py-2.5 text-[14px]"
-                style={inputStyle}
-              />
-            </div>
-            <div className="flex-1">
-              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>Sobrenome</label>
-              <input
-                type="text"
-                value={sobrenome}
-                onChange={(e) => setSobrenome(e.target.value)}
-                placeholder="Silva"
-                className="w-full rounded-xl px-3 py-2.5 text-[14px]"
-                style={inputStyle}
-              />
-            </div>
+        {/* Aviso cordial de recadastro */}
+        {precisaRecadastrar && step === "cadastro" && (
+          <div className="mb-4 rounded-xl p-3.5" style={{ background: tema.accentSoft, border: `1px solid ${tema.accentBorder}` }}>
+            <p className="text-[13px] leading-relaxed" style={{ color: p.texto }}>
+              Olá, companheiro(a)! 👋 O nosso app mudou, está de cara nova e com novas funções — por isso
+              gostaríamos que atualizasse seus dados cadastrais. É rapidinho!
+            </p>
           </div>
         )}
 
+        {/* ── TELA: RECUPERAR SENHA ── */}
+        {step === "recuperar" ? (
+          <>
+            {!recuperacaoEnviada ? (
+              <>
+                <div className="mb-4">
+                  <label className="mb-2 block text-[11px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>
+                    E-mail cadastrado
+                  </label>
+                  <input
+                    type="email"
+                    value={emailRecuperacao}
+                    onChange={(e) => setEmailRecuperacao(e.target.value)}
+                    placeholder="seuemail@exemplo.com"
+                    className="w-full rounded-xl px-3 py-2.5 text-[14px]"
+                    style={inputStyle}
+                  />
+                </div>
+
+                {erro && (
+                  <div className="mb-3 flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: p.alertaSoft, border: `1px solid ${p.alerta}40` }}>
+                    <AlertTriangle size={13} color={p.alerta} />
+                    <p className="text-[12px]" style={{ color: p.alerta }}>{erro}</p>
+                  </div>
+                )}
+
+                <button
+                  onClick={enviarRecuperacao}
+                  disabled={carregando}
+                  className="mb-3 w-full rounded-2xl py-3.5 text-[14.5px] font-semibold transition-all active:scale-[0.98]"
+                  style={{ background: carregando ? tema.accentSoft : tema.gradient, color: "#FFFFFF", opacity: carregando ? 0.8 : 1 }}
+                >
+                  {carregando ? "Enviando..." : "Enviar e-mail de recuperação"}
+                </button>
+              </>
+            ) : (
+              <div className="mb-4 flex flex-col items-center gap-3 rounded-xl p-4 text-center" style={{ background: p.sucessoSoft }}>
+                <CheckCircle2 size={28} color={p.sucesso} />
+                <p className="text-[13px] leading-relaxed" style={{ color: p.texto }}>
+                  Enviamos um e-mail para <strong>{emailRecuperacao}</strong> com as instruções para redefinir sua senha.
+                </p>
+              </div>
+            )}
+
+            <button
+              onClick={() => { setStep("login"); setErro(""); setRecuperacaoEnviada(false); }}
+              className="w-full py-2 text-[12.5px] text-center transition-colors"
+              style={{ color: p.textoTerciario }}
+            >
+              ← Voltar para o login
+            </button>
+          </>
+        ) : (
+        <>
+        {step === "cadastro" && (
+          <>
+            <div className="mb-3 flex gap-2">
+              <div className="flex-1">
+                <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>Nome</label>
+                <input
+                  type="text"
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  placeholder="Leonardo"
+                  className="w-full rounded-xl px-3 py-2.5 text-[14px]"
+                  style={inputStyle}
+                />
+              </div>
+              <div className="flex-1">
+                <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>Sobrenome</label>
+                <input
+                  type="text"
+                  value={sobrenome}
+                  onChange={(e) => setSobrenome(e.target.value)}
+                  placeholder="Silva"
+                  className="w-full rounded-xl px-3 py-2.5 text-[14px]"
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+            <div className="mb-3">
+              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>
+                Login (para entrar no app)
+              </label>
+              <input
+                type="text"
+                value={loginCadastro}
+                onChange={(e) => setLoginCadastro(e.target.value.replace(/\s/g, ""))}
+                placeholder="leo.franklin"
+                autoCapitalize="none"
+                className="w-full rounded-xl px-3 py-2.5 text-[14px]"
+                style={inputStyle}
+              />
+            </div>
+            <div className="mb-4">
+              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>
+                E-mail (para recuperar sua senha)
+              </label>
+              <input
+                type="email"
+                value={emailCadastro}
+                onChange={(e) => setEmailCadastro(e.target.value)}
+                placeholder="seuemail@exemplo.com"
+                className="w-full rounded-xl px-3 py-2.5 text-[14px]"
+                style={inputStyle}
+              />
+            </div>
+          </>
+        )}
+
         {step === "login" && (
-          <div className="mb-3 flex gap-2">
-            <div className="flex-1">
-              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>Nome</label>
-              <input
-                type="text"
-                value={nomeLogin}
-                onChange={(e) => setNomeLogin(e.target.value)}
-                placeholder="Leonardo"
-                className="w-full rounded-xl px-3 py-2.5 text-[14px]"
-                style={inputStyle}
-              />
-            </div>
-            <div className="flex-1">
-              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>Sobrenome</label>
-              <input
-                type="text"
-                value={sobrenomeLogin}
-                onChange={(e) => setSobrenomeLogin(e.target.value)}
-                placeholder="Franklin"
-                className="w-full rounded-xl px-3 py-2.5 text-[14px]"
-                style={inputStyle}
-              />
-            </div>
+          <div className="mb-4">
+            <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide" style={{ color: p.textoTerciario }}>Login</label>
+            <input
+              type="text"
+              value={loginEntrada}
+              onChange={(e) => setLoginEntrada(e.target.value.replace(/\s/g, ""))}
+              placeholder="leo.franklin"
+              autoCapitalize="none"
+              className="w-full rounded-xl px-3 py-2.5 text-[14px]"
+              style={inputStyle}
+            />
           </div>
         )}
 
@@ -2286,7 +2468,7 @@ function LoginModal({ onLogin, p, tema }) {
                 maxLength={1}
                 value={senha[idx] || ""}
                 onChange={(e) => handleSenhaDigito(idx, e.target.value)}
-                onKeyDown={(e) => handleKeyDownSenha(idx, e, step === "cadastro")}
+                onKeyDown={(e) => handleKeyDownSenha(idx, e)}
                 className="h-12 w-12 rounded-xl text-center text-[20px] font-bold"
                 style={{
                   ...inputStyle,
@@ -2295,6 +2477,15 @@ function LoginModal({ onLogin, p, tema }) {
               />
             ))}
           </div>
+          {step === "login" && (
+            <button
+              onClick={() => { setStep("recuperar"); setErro(""); }}
+              className="mt-2 w-full text-center text-[12px] transition-colors"
+              style={{ color: tema.accent }}
+            >
+              Esqueci minha senha
+            </button>
+          )}
         </div>
 
         {step === "cadastro" && (
@@ -2369,6 +2560,8 @@ function LoginModal({ onLogin, p, tema }) {
         >
           {step === "login" ? "Primeiro acesso? Cadastrar" : "Já tenho acesso → Entrar"}
         </button>
+        </>
+        )}
       </div>
     </div>
   );
@@ -3710,15 +3903,37 @@ function MaintenanceApp() {
     return JSON.parse(localStorage.getItem("usuario_sessao") || "null");
   });
 
-  // Detecta sessão "órfã": o usuario_id salvo no celular não existe mais no banco
-  // (ex: o banco foi resetado). Nesse caso, desloga automaticamente e pede novo login.
+  // Versão do schema de cadastro: subimos esse número sempre que exigirmos que
+  // TODOS os usuários recadastrem (ex: novos campos obrigatórios como login/email).
+  // Um usuário com sessão salva de versão anterior é deslogado uma única vez,
+  // com aviso cordial, mesmo que a sessão dele ainda "funcione" tecnicamente.
+  const VERSAO_CADASTRO_ATUAL = 2;
+
+  // Detecta sessão "órfã" (usuário não existe mais no banco) OU sessão de versão
+  // de cadastro antiga (precisa preencher campos novos). Em ambos os casos,
+  // desloga e sinaliza recadastro com aviso cordial, em vez de tela de login padrão.
+  const [precisaRecadastrar, setPrecisaRecadastrar] = useState(false);
   useEffect(() => {
-    if (!usuario || !usuario.id) return;
+    const versaoSalva = parseInt(localStorage.getItem("versao_cadastro") || "0", 10);
+    if (!usuario) {
+      // Sem sessão nenhuma: só marca a versão atual para não pedir recadastro de novo à toa
+      localStorage.setItem("versao_cadastro", String(VERSAO_CADASTRO_ATUAL));
+      return;
+    }
+    if (versaoSalva < VERSAO_CADASTRO_ATUAL) {
+      localStorage.removeItem("usuario_sessao");
+      localStorage.setItem("versao_cadastro", String(VERSAO_CADASTRO_ATUAL));
+      setUsuario(null);
+      setPrecisaRecadastrar(true);
+      return;
+    }
+    if (!usuario.id) return;
     let cancelado = false;
     supaVerificarUsuarioExiste(usuario.id).then((existe) => {
       if (!existe && !cancelado) {
         localStorage.removeItem("usuario_sessao");
         setUsuario(null);
+        setPrecisaRecadastrar(true);
       }
     });
     return () => { cancelado = true; };
@@ -4141,6 +4356,13 @@ function MaintenanceApp() {
 
   const openArea = AREAS.find((a) => a.id === openAreaId);
 
+  // Verdadeiro quando qualquer modal do app está aberto — usado para esconder
+  // elementos flutuantes (FAB, badge) que não devem "vazar" por cima de modais.
+  const algumModalAberto = !!(
+    openAreaId || reportOpen || resumoIaOpen || reportOntemOpen ||
+    resetConfirm || usuarioEditando || atividadeModalOpen
+  );
+
   // Formata os campos estruturados preenchidos de uma área (ex: Queimador 1, Bomba de Vácuo 2...)
   // no padrão: "Queimador 1 - Temp: 127°C, Set point: 135°C"
   function formatarValoresArea(area, s) {
@@ -4440,7 +4662,7 @@ ${reportText}`;
       style={{ background: p.fundo, fontFamily: "'Inter', -apple-system, sans-serif" }}
     >
       {/* Modal de login */}
-      {!usuario && <LoginModal onLogin={(u) => setUsuario(u)} p={p} tema={tema} />}
+      {!usuario && <LoginModal onLogin={(u) => setUsuario(u)} p={p} tema={tema} precisaRecadastrar={precisaRecadastrar} />}
 
       {/* Menu lateral */}
       <MenuLateral
@@ -4770,7 +4992,7 @@ ${reportText}`;
       )}
 
       {/* Botão flutuante (FAB) — Adicionar Atividade não Rotineira */}
-      {pagina === "checklist" && (
+      {pagina === "checklist" && !algumModalAberto && (
         <>
           {/* Overlay invisível: toque fora recolhe o FAB sem abrir o modal */}
           {fabAtividadeExpandido && (
@@ -4812,13 +5034,15 @@ ${reportText}`;
           </button>
           {atividadesNaoRotineiras.length > 0 && !fabAtividadeExpandido && (
             <span
-              className="fixed z-[51] flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[12px] font-bold text-white"
+              className="fixed flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[12px] font-bold text-white"
               style={{
                 right: "12px",
                 bottom: "212px",
+                zIndex: 60,
                 background: "#DC2626",
                 boxShadow: "0 2px 6px rgba(220,38,38,0.5)",
                 border: `2px solid ${p.fundo}`,
+                pointerEvents: "none",
               }}
             >
               {atividadesNaoRotineiras.length}
