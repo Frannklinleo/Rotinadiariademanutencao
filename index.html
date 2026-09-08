@@ -316,6 +316,29 @@ async function supaUploadAvatar(userId, file) {
   return `${SUPA_URL}/storage/v1/object/public/avatars/${path}?t=${Date.now()}`;
 }
 
+// Upload de foto anexada a uma área do checklist (bucket separado, um arquivo por foto)
+async function supaUploadFotoArea(file, nomeUnico) {
+  const ext = (file.name && file.name.includes(".")) ? file.name.split(".").pop() : "jpg";
+  const path = `${nomeUnico}.${ext}`;
+  const res = await fetch(`${SUPA_URL}/storage/v1/object/fotos-areas/${path}`, {
+    method: "POST",
+    headers: {
+      "apikey": SUPA_KEY,
+      "Authorization": `Bearer ${SUPA_KEY}`,
+      "Content-Type": file.type,
+      "x-upsert": "true",
+    },
+    body: file,
+  });
+  if (!res.ok) {
+    let detalhe = "";
+    try { detalhe = await res.text(); } catch (_) {}
+    throw new Error(`Upload falhou (${res.status}): ${detalhe || "verifique se o bucket 'fotos-areas' existe e é público"}`);
+  }
+  return `${SUPA_URL}/storage/v1/object/public/fotos-areas/${path}`;
+}
+
+
 // ----------------------------------------------------------------------------
 // DADOS DA ROTINA
 // ----------------------------------------------------------------------------
@@ -3234,7 +3257,7 @@ function ModalAtividadeNaoRotineira({ onClose, onConfirmar, tema, p, usuario, at
 }
 
 
-function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChangeComentario, onSetAnomalia, onSave, tema, p, fotos, onAddFotos, onRemoveFoto }) {
+function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChangeComentario, onSetAnomalia, onSave, tema, p, fotos, onAddFotos, onRemoveFoto, enviandoFoto }) {
   const [showComment, setShowComment] = useState(
     status.comentario && status.comentario.trim().length > 0
   );
@@ -3527,27 +3550,31 @@ function AreaModal({ area, status, onClose, onToggleItem, onChangeValor, onChang
             <div className="flex gap-2">
               <button
                 onClick={() => cameraInputRef.current && cameraInputRef.current.click()}
+                disabled={!!enviandoFoto}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-[13px] font-medium"
                 style={{
                   background: tema.accentSoft2,
                   color: tema.accent,
                   border: `1px dashed ${tema.accentBorder}`,
+                  opacity: enviandoFoto ? 0.6 : 1,
                 }}
               >
                 <Camera size={15} />
-                Tirar foto
+                {enviandoFoto ? "Enviando..." : "Tirar foto"}
               </button>
               <button
                 onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                disabled={!!enviandoFoto}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-[13px] font-medium"
                 style={{
                   background: p.superficieAlt,
                   color: p.textoSecundario,
                   border: `1px dashed ${p.bordaForte}`,
+                  opacity: enviandoFoto ? 0.6 : 1,
                 }}
               >
                 <ImageIcon size={15} />
-                Anexar
+                {enviandoFoto ? "Enviando..." : "Anexar"}
               </button>
             </div>
 
@@ -4083,36 +4110,60 @@ function MaintenanceApp() {
   const [loaded, setLoaded] = useState(false);
   const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
   const [resetConfirm, setResetConfirm] = useState(false);
-  // Fotos ficam só na memória da sessão (não persistidas, para não estourar o
-  // limite de armazenamento do navegador e arriscar o progresso do checklist),
-  // organizadas por id de área. Resetam ao trocar de rotina/dia ou recarregar a página.
-  const [fotosPorArea, setFotosPorArea] = useState({});
 
-  // Limpa as fotos da sessão ao trocar de rotina (mecânica/elétrica têm fotos independentes)
+  // Fotos das áreas: cada foto é enviada ao Supabase Storage assim que é anexada,
+  // e só a URL (texto leve) fica salva no localStorage por dia+rotina — assim
+  // sobrevive a troca de tela, fechamento do app, e fica disponível em outros
+  // dispositivos também (por enquanto só localmente; sincronização entre
+  // dispositivos ficaria para uma etapa futura).
+  const chaveFotos = useMemo(() => `fotos:${storageKey}`, [storageKey]);
+  const [fotosPorArea, setFotosPorArea] = useState(() => {
+    try {
+      const raw = localStorage.getItem(chaveFotos);
+      return raw ? JSON.parse(raw) : {};
+    } catch (_) {
+      return {};
+    }
+  });
+  const [enviandoFotoAreaId, setEnviandoFotoAreaId] = useState(null);
+
+  // Ao trocar de dia/rotina, recarrega as fotos daquela chave específica (não zera à toa)
   useEffect(() => {
-    setFotosPorArea({});
-  }, [storageKey]);
+    try {
+      const raw = localStorage.getItem(chaveFotos);
+      setFotosPorArea(raw ? JSON.parse(raw) : {});
+    } catch (_) {
+      setFotosPorArea({});
+    }
+  }, [chaveFotos]);
 
-  function fileToDataUrl(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
+  // Persiste a cada mudança
+  useEffect(() => {
+    try {
+      localStorage.setItem(chaveFotos, JSON.stringify(fotosPorArea));
+    } catch (_) {}
+  }, [fotosPorArea, chaveFotos]);
 
   async function addFotos(areaId, files) {
-    const novas = await Promise.all(
-      files.map(async (file) => ({
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        dataUrl: await fileToDataUrl(file),
-      }))
-    );
-    setFotosPorArea((prev) => ({
-      ...prev,
-      [areaId]: [...(prev[areaId] || []), ...novas],
-    }));
+    setEnviandoFotoAreaId(areaId);
+    const novas = [];
+    for (const file of files) {
+      const idFoto = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      try {
+        const url = await supaUploadFotoArea(file, idFoto);
+        novas.push({ id: idFoto, dataUrl: url });
+      } catch (e) {
+        console.error("Falha ao enviar foto da área:", e);
+        alert(`Não foi possível enviar uma das fotos: ${e && e.message ? e.message : "tente novamente"}`);
+      }
+    }
+    if (novas.length > 0) {
+      setFotosPorArea((prev) => ({
+        ...prev,
+        [areaId]: [...(prev[areaId] || []), ...novas],
+      }));
+    }
+    setEnviandoFotoAreaId(null);
   }
 
   function removeFoto(areaId, fotoId) {
@@ -5067,6 +5118,7 @@ ${reportText}`;
           fotos={fotosPorArea[openArea.id]}
           onAddFotos={addFotos}
           onRemoveFoto={removeFoto}
+          enviandoFoto={enviandoFotoAreaId === openArea.id}
         />
       )}
 
