@@ -298,12 +298,13 @@ async function supaAtualizarDadosUsuario(userId, nome, sobrenome) {
 async function supaUploadAvatar(userId, file) {
   const ext = file.name.split(".").pop() || "jpg";
   const path = `${userId}.${ext}`;
+  const contentType = file.type && file.type.trim() ? file.type : "image/jpeg";
   const res = await fetch(`${SUPA_URL}/storage/v1/object/avatars/${path}`, {
     method: "POST",
     headers: {
       "apikey": SUPA_KEY,
       "Authorization": `Bearer ${SUPA_KEY}`,
-      "Content-Type": file.type,
+      "Content-Type": contentType,
       "x-upsert": "true",
     },
     body: file,
@@ -320,12 +321,13 @@ async function supaUploadAvatar(userId, file) {
 async function supaUploadFotoArea(file, nomeUnico) {
   const ext = (file.name && file.name.includes(".")) ? file.name.split(".").pop() : "jpg";
   const path = `${nomeUnico}.${ext}`;
+  const contentType = file.type && file.type.trim() ? file.type : "image/jpeg";
   const res = await fetch(`${SUPA_URL}/storage/v1/object/fotos-areas/${path}`, {
     method: "POST",
     headers: {
       "apikey": SUPA_KEY,
       "Authorization": `Bearer ${SUPA_KEY}`,
-      "Content-Type": file.type,
+      "Content-Type": contentType,
       "x-upsert": "true",
     },
     body: file,
