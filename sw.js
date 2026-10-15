@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v5";
+const CACHE_VERSION = "v6";
 const CACHE_NAME = `rotina-manutencao-${CACHE_VERSION}`;
 const URLS_TO_CACHE = ["./", "./index.html", "./manifest.json"];
 

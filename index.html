@@ -25,6 +25,7 @@
 
 <!-- Lucide icons (build UMD) -->
 <script src="https://unpkg.com/lucide@0.462.0/dist/umd/lucide.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
   html, body, #root {
@@ -959,6 +960,9 @@ function totalItensDe(areas) {
 // Um item de checklist pode ser uma string simples (checkbox) ou um objeto
 // estruturado { label, campos: [{ id, label, tipo, ... }] } com inputs/selects.
 // Esta função decide, para os dois formatos, se o item já está "completo".
+// Botão do relatório de fotos ocultado (código mantido). Troque para true para reexibir.
+const MOSTRAR_BOTAO_FOTOS = false;
+
 function itemEstaCompleto(item, idx, status) {
   if (typeof item === "string") {
     return !!(status && status.checkedItems && status.checkedItems[idx]);
@@ -4413,7 +4417,7 @@ function MaintenanceApp() {
   // elementos flutuantes (FAB, badge) que não devem "vazar" por cima de modais.
   const algumModalAberto = !!(
     openAreaId || reportOpen || resumoIaOpen || reportOntemOpen ||
-    resetConfirm || usuarioEditando || atividadeModalOpen
+    resetConfirm || usuarioEditando || atividadeModalOpen || pdfModalOpen
   );
 
   // Formata os campos estruturados preenchidos de uma área (ex: Queimador 1, Bomba de Vácuo 2...)
@@ -4574,6 +4578,275 @@ ${reportText}`;
       }
     }
     setResumoIaCarregando(false);
+  }
+
+  // ── Relatório geral em PDF (jsPDF) ───────────────────────────────────────
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const [pdfGerando, setPdfGerando] = useState(false);
+  const [pdfErro, setPdfErro] = useState(null);
+  const [pdfResultado, setPdfResultado] = useState(null); // { blob, nome, tamanhoMB }
+
+  function carregarImagemPdf(src) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  }
+
+  // Redimensiona (largura máx.) e devolve JPEG em dataURL + proporção
+  function comprimirImagemPdf(img, larguraMax, qualidade) {
+    const escala = Math.min(1, larguraMax / img.width);
+    const w = Math.max(1, Math.round(img.width * escala));
+    const h = Math.max(1, Math.round(img.height * escala));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    return { data: canvas.toDataURL("image/jpeg", qualidade), w, h };
+  }
+
+  function montarPdf(imagensPorArea, imagensAtividades, larguraMax, qualidade) {
+    const jsPDF = window.jspdf.jsPDF;
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const PW = 210, PH = 297, M = 14;
+    const largUtil = PW - M * 2;
+    let y = M;
+
+    function garantirEspaco(h) {
+      if (y + h > PH - M) {
+        doc.addPage();
+        y = M;
+      }
+    }
+    function texto(str, tamanho, estilo, cor, recuo) {
+      doc.setFont("helvetica", estilo || "normal");
+      doc.setFontSize(tamanho);
+      doc.setTextColor(cor[0], cor[1], cor[2]);
+      const linhas = doc.splitTextToSize(String(str), largUtil - (recuo || 0));
+      linhas.forEach((ln) => {
+        garantirEspaco(tamanho * 0.42 + 1.5);
+        doc.text(ln, M + (recuo || 0), y + tamanho * 0.35);
+        y += tamanho * 0.42 + 1.2;
+      });
+    }
+    function fotosGrade(lista) {
+      if (!lista || lista.length === 0) return;
+      const gap = 3;
+      const colW = (largUtil - gap) / 2;
+      const maxH = 62;
+      let col = 0;
+      let alturaLinha = 0;
+      lista.forEach((im) => {
+        let w = colW;
+        let h = (im.h / im.w) * w;
+        if (h > maxH) { h = maxH; w = (im.w / im.h) * h; }
+        if (col === 0) {
+          garantirEspaco(maxH + 2);
+        }
+        const x = M + col * (colW + gap);
+        doc.addImage(im.data, "JPEG", x, y, w, h);
+        alturaLinha = Math.max(alturaLinha, h);
+        col++;
+        if (col === 2) {
+          y += alturaLinha + gap;
+          col = 0;
+          alturaLinha = 0;
+        }
+      });
+      if (col === 1) y += alturaLinha + gap;
+    }
+
+    // Cabeçalho
+    const nomeUsuario = usuario ? `${usuario.nome} ${usuario.sobrenome}` : "Colaborador";
+    doc.setFillColor(20, 23, 28);
+    doc.rect(0, 0, PW, 26, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.text(`Relatório diário de manutenção - ${rotinaAtual.label}`, M, 11);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(`${formatarDataLonga(today)}  |  ${nomeUsuario}`, M, 18);
+    doc.text(`Progresso geral: ${totalChecked}/${TOTAL_ITENS} itens verificados`, M, 23);
+    y = 33;
+
+    // Áreas
+    AREAS.forEach((area) => {
+      const s = status[area.id] || { checkedItems: [], valores: {}, comentario: "" };
+      const checked = area.itens.filter((item, i) => itemEstaCompleto(item, i, s)).length;
+
+      garantirEspaco(18);
+      doc.setFillColor(244, 244, 244);
+      doc.rect(M, y, largUtil, 7, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(20, 23, 28);
+      doc.text(area.nome, M + 2, y + 5);
+      doc.text(`${checked}/${area.itens.length}`, M + largUtil - 2, y + 5, { align: "right" });
+      y += 10;
+
+      // Itens
+      area.itens.forEach((item, i) => {
+        const ok = itemEstaCompleto(item, i, s);
+        const rotulo = typeof item === "string" ? item : item.label;
+        texto(`${ok ? "[x]" : "[  ]"}  ${rotulo}`, 9, "normal", ok ? [40, 40, 40] : [150, 150, 150], 2);
+      });
+
+      // Valores dos equipamentos
+      const valoresFmt = formatarValoresArea(area, s);
+      if (valoresFmt.length > 0) {
+        y += 1;
+        texto("Valores registrados", 9, "bold", [217, 123, 41], 2);
+        valoresFmt.forEach((ln) => texto(ln, 9, "normal", [20, 23, 28], 5));
+      }
+
+      // Observação
+      if (s.comentario && s.comentario.trim().length > 0) {
+        y += 1;
+        texto("Observação", 9, "bold", [217, 123, 41], 2);
+        texto(s.comentario.trim(), 9, "normal", [20, 23, 28], 5);
+      }
+
+      // Fotos da área
+      const imgs = imagensPorArea[area.id] || [];
+      if (imgs.length > 0) {
+        y += 2;
+        fotosGrade(imgs);
+      }
+      y += 4;
+    });
+
+    // Atividades não rotineiras
+    if (atividadesNaoRotineiras.length > 0) {
+      garantirEspaco(20);
+      doc.setFillColor(20, 23, 28);
+      doc.rect(M, y, largUtil, 7, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(255, 255, 255);
+      doc.text("Atividades Não Rotineiras realizadas", M + 2, y + 5);
+      y += 11;
+      atividadesNaoRotineiras.forEach((a, idx) => {
+        if (a.preventiva) {
+          texto(`Preventiva - O.S. ${a.preventiva.numeroOS}`, 10, "bold", [20, 23, 28], 2);
+        }
+        if (a.descricao) texto(a.descricao, 9, "normal", [20, 23, 28], 2);
+        if (a.preventiva && a.preventiva.descricao) {
+          texto(`Serviço realizado: ${a.preventiva.descricao}`, 9, "normal", [20, 23, 28], 2);
+        }
+        const imgs = imagensAtividades[idx] || [];
+        if (imgs.length > 0) {
+          y += 1;
+          fotosGrade(imgs);
+        }
+        y += 4;
+      });
+    }
+
+    // Rodapé com paginação
+    const total = doc.getNumberOfPages();
+    for (let n = 1; n <= total; n++) {
+      doc.setPage(n);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(140, 140, 140);
+      doc.text(`Página ${n}/${total}  -  gerado em ${formatarDataCurta(today)}`, PW / 2, PH - 6, { align: "center" });
+    }
+    return doc.output("blob");
+  }
+
+  async function gerarRelatorioPDF() {
+    setPdfModalOpen(true);
+    setPdfGerando(true);
+    setPdfErro(null);
+    setPdfResultado(null);
+    try {
+      if (!window.jspdf || !window.jspdf.jsPDF) {
+        throw new Error("Biblioteca de PDF não carregou. Verifique a internet e recarregue o app.");
+      }
+      // Carrega todas as fotos uma única vez (area = URL do Supabase; atividade = base64)
+      const originaisArea = {};
+      for (const area of AREAS) {
+        const lista = fotosPorArea[area.id] || [];
+        const imgs = [];
+        for (const f of lista) {
+          const img = await carregarImagemPdf(f.dataUrl);
+          if (img) imgs.push(img);
+        }
+        originaisArea[area.id] = imgs;
+      }
+      const originaisAtiv = {};
+      for (let i = 0; i < atividadesNaoRotineiras.length; i++) {
+        const lista = atividadesNaoRotineiras[i].fotos || [];
+        const imgs = [];
+        for (const f of lista) {
+          const img = await carregarImagemPdf(f.dataUrl);
+          if (img) imgs.push(img);
+        }
+        originaisAtiv[i] = imgs;
+      }
+
+      const LIMITE = 5 * 1024 * 1024 * 0.97;
+      let larguraMax = 600;
+      let qualidade = 0.6;
+      let blob = null;
+      for (let tentativa = 0; tentativa < 8; tentativa++) {
+        const porArea = {};
+        Object.keys(originaisArea).forEach((k) => {
+          porArea[k] = originaisArea[k].map((img) => comprimirImagemPdf(img, larguraMax, qualidade));
+        });
+        const porAtiv = {};
+        Object.keys(originaisAtiv).forEach((k) => {
+          porAtiv[k] = originaisAtiv[k].map((img) => comprimirImagemPdf(img, larguraMax, qualidade));
+        });
+        blob = montarPdf(porArea, porAtiv, larguraMax, qualidade);
+        if (blob.size <= LIMITE) break;
+        larguraMax = Math.round(larguraMax * 0.85);
+        qualidade = Math.max(0.3, qualidade - 0.08);
+      }
+      if (blob.size > 5 * 1024 * 1024) {
+        throw new Error("Não foi possível reduzir o PDF para menos de 5 MB. Remova algumas fotos e tente de novo.");
+      }
+      const nome = `Rotina_${rotinaAtual.label}_${formatarDataCurta(today).replace(/[^0-9]/g, "-")}.pdf`;
+      setPdfResultado({ blob, nome, tamanhoMB: (blob.size / (1024 * 1024)).toFixed(2) });
+    } catch (e) {
+      console.error("Falha ao gerar PDF:", e);
+      setPdfErro(e && e.message ? e.message : "Falha ao gerar o PDF.");
+    }
+    setPdfGerando(false);
+  }
+
+  function baixarPdf() {
+    if (!pdfResultado) return;
+    const url = URL.createObjectURL(pdfResultado.blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = pdfResultado.nome;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
+  async function compartilharPdf() {
+    if (!pdfResultado) return;
+    const arquivo = new File([pdfResultado.blob], pdfResultado.nome, { type: "application/pdf" });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
+        await navigator.share({ files: [arquivo], title: pdfResultado.nome });
+        return;
+      }
+      baixarPdf();
+    } catch (e) {
+      if (e && e.name === "AbortError") return; // usuário fechou a folha de compartilhamento
+      baixarPdf();
+    }
   }
 
   function abrirRelatorioFotos() {
@@ -4977,7 +5250,7 @@ ${reportText}`;
 
         <div className="flex gap-2">
           <button
-            onClick={() => setReportOpen(true)}
+            onClick={gerarRelatorioPDF}
             className="flex flex-1 items-center justify-center gap-2 rounded-2xl py-4 text-[14px] font-semibold shadow-2xl transition-all active:scale-[0.98] duration-300"
             style={{
               background: tema.gradient,
@@ -4986,7 +5259,7 @@ ${reportText}`;
             }}
           >
             <FileText size={18} strokeWidth={2.3} />
-            Relatório de texto
+            Relatório PDF
           </button>
 
           <button
@@ -5002,6 +5275,7 @@ ${reportText}`;
             <Zap size={20} strokeWidth={2.3} />
           </button>
 
+          {MOSTRAR_BOTAO_FOTOS && (
           <button
             onClick={abrirRelatorioFotos}
             disabled={totalFotos === 0}
@@ -5023,6 +5297,7 @@ ${reportText}`;
               </span>
             )}
           </button>
+          )}
         </div>
 
         {/* Botão "Ontem" — aparece sempre (carregando ou com dados) */}
@@ -5122,6 +5397,79 @@ ${reportText}`;
           onRemoveFoto={removeFoto}
           enviandoFoto={enviandoFotoAreaId === openArea.id}
         />
+      )}
+
+      {pdfModalOpen && (
+        <div
+          className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center"
+          style={{ background: "rgba(0,0,0,0.55)" }}
+          onClick={() => { if (!pdfGerando) setPdfModalOpen(false); }}
+        >
+          <div
+            className="w-full max-w-md rounded-t-3xl p-6 sm:rounded-3xl"
+            style={{ background: p.superficie, color: p.texto, border: `1px solid ${p.borda}` }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-[16px] font-semibold">Relatório em PDF</h3>
+              {!pdfGerando && (
+                <button onClick={() => setPdfModalOpen(false)} style={{ color: p.textoSecundario }}>
+                  <X size={20} />
+                </button>
+              )}
+            </div>
+
+            {pdfGerando && (
+              <div className="flex flex-col items-center gap-3 py-6">
+                <div
+                  className="h-8 w-8 animate-spin rounded-full"
+                  style={{ border: `3px solid ${tema.accentRgbLow}`, borderTopColor: tema.accent }}
+                />
+                <p className="text-[13px]" style={{ color: p.textoSecundario }}>
+                  Gerando PDF e comprimindo fotos…
+                </p>
+              </div>
+            )}
+
+            {!pdfGerando && pdfErro && (
+              <div className="py-2">
+                <p className="mb-4 text-[13px]" style={{ color: "#DC2626" }}>{pdfErro}</p>
+                <button
+                  onClick={gerarRelatorioPDF}
+                  className="w-full rounded-2xl py-3 text-[14px] font-semibold"
+                  style={{ background: tema.gradient, color: "#FFFFFF" }}
+                >
+                  Tentar novamente
+                </button>
+              </div>
+            )}
+
+            {!pdfGerando && pdfResultado && (
+              <div className="py-2">
+                <p className="mb-1 text-[13px] font-medium">{pdfResultado.nome}</p>
+                <p className="mb-4 text-[12px]" style={{ color: p.textoSecundario }}>
+                  Tamanho: {pdfResultado.tamanhoMB} MB (limite 5 MB)
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={compartilharPdf}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-2xl py-3 text-[14px] font-semibold"
+                    style={{ background: tema.gradient, color: "#FFFFFF" }}
+                  >
+                    <Send size={16} /> Compartilhar
+                  </button>
+                  <button
+                    onClick={baixarPdf}
+                    className="flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-[14px] font-medium"
+                    style={{ background: p.superficieAlt, color: p.texto, border: `1px solid ${p.borda}` }}
+                  >
+                    <Download size={16} /> Baixar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       <ReportModal
