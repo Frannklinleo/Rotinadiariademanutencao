@@ -1100,6 +1100,16 @@ function ProgressRing({ progress, size = 44, stroke = 4, color = "#F5A623", trac
 
 
 // ── Registro de atividades (antes/depois) ───────────────────────────────────
+const CATEGORIAS_ATV = ["5S", "Kaizen", "Anomalia"];
+function corCategoria(c) {
+  if (c === "5S") return "#2563EB";
+  if (c === "Kaizen") return "#16A34A";
+  if (c === "Anomalia") return "#DC2626";
+  return "#8C8C8C";
+}
+function tituloComCategoria(a) {
+  return (a.categoria ? "[" + a.categoria + "] " : "") + a.titulo;
+}
 function hojeISOLocal() {
   const d = new Date();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -1249,7 +1259,7 @@ async function desenharPaginasAtividades(lista, rotuloUsuario) {
       ctx.fillStyle = "#14171C";
       ctx.font = "bold 32px Arial, sans-serif";
       ctx.textAlign = "left";
-      ctx.fillText(cortarTexto(ctx, a.titulo, W - M * 2 - 330), M, y0 + 30);
+      ctx.fillText(cortarTexto(ctx, tituloComCategoria(a), W - M * 2 - 330), M, y0 + 30);
       ctx.font = "26px Arial, sans-serif";
       ctx.fillStyle = "#555555";
       ctx.textAlign = "right";
@@ -1286,6 +1296,183 @@ function canvasParaBlob(canvas, tipo, qualidade) {
   return new Promise((resolve, reject) => {
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Falha ao gerar imagem."))), tipo, qualidade);
   });
+}
+
+
+// ── Relatórios semanal / mensal (slides 1920x1080) ──────────────────────────
+function dataParaISO(d) {
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${dia}`;
+}
+const MESES_PT = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+// tipo: "semanal" | "mensal"; periodo: "atual" | "anterior"
+function calcularPeriodo(tipo, periodo) {
+  const hoje = new Date();
+  hoje.setHours(12, 0, 0, 0);
+  if (tipo === "semanal") {
+    const dow = (hoje.getDay() + 6) % 7; // segunda = 0
+    const ini = new Date(hoje);
+    ini.setDate(hoje.getDate() - dow - (periodo === "anterior" ? 7 : 0));
+    const fim = new Date(ini);
+    fim.setDate(ini.getDate() + 6);
+    return { inicio: dataParaISO(ini), fim: dataParaISO(fim), rotulo: `Semana de ${isoParaBR(dataParaISO(ini))} a ${isoParaBR(dataParaISO(fim))}` };
+  }
+  const base = new Date(hoje.getFullYear(), hoje.getMonth() - (periodo === "anterior" ? 1 : 0), 1, 12);
+  const ultimo = new Date(base.getFullYear(), base.getMonth() + 1, 0, 12);
+  return { inicio: dataParaISO(base), fim: dataParaISO(ultimo), rotulo: `${MESES_PT[base.getMonth()]} de ${base.getFullYear()}` };
+}
+function escolherGrade(n, W, H, gap) {
+  let melhor = { cols: 1, rows: n, fit: 0 };
+  for (let c = 1; c <= 8; c++) {
+    const rows = Math.ceil(n / c);
+    const cw = (W - (c - 1) * gap) / c;
+    const ch = (H - (rows - 1) * gap) / rows;
+    const tit = Math.max(16, Math.min(30, cw / 14));
+    const cab = tit * 2.7;
+    const imgw = (cw - 36 - 14) / 2;
+    const imgh = ch - cab - 22;
+    const fit = Math.min(imgw, imgh * 4 / 3);
+    if (fit > melhor.fit) melhor = { cols: c, rows: rows, fit: fit };
+  }
+  return melhor;
+}
+async function desenharSlidesRelatorio(lista, meta) {
+  const imgs = [];
+  for (const a of lista) {
+    const antes = await carregarImagemCors(a.foto_antes);
+    const depois = a.foto_depois ? await carregarImagemCors(a.foto_depois) : null;
+    imgs.push({ antes, depois });
+  }
+  const avatar = meta.fotoUrl ? await carregarImagemCors(meta.fotoUrl) : null;
+  const W = 1920, H = 1080;
+  const GX = 60, GY = 200, GW = 1380, GH = 820, GAP = 20;
+  const POR_PAG = meta.porPagina;
+  const total = Math.max(1, Math.ceil(lista.length / POR_PAG));
+  const paginas = [];
+  for (let pg = 0; pg < total; pg++) {
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#F4F4F2";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#14171C";
+    ctx.fillRect(0, 0, 24, H);
+    ctx.textBaseline = "alphabetic";
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#14171C";
+    ctx.font = "bold 58px Arial, sans-serif";
+    ctx.fillText(meta.titulo, GX, 90);
+    ctx.fillStyle = "#D97B29";
+    ctx.font = "bold 34px Arial, sans-serif";
+    ctx.fillText(meta.periodoRotulo, GX, 145);
+    ctx.fillStyle = "#D97B29";
+    ctx.fillRect(GX, 162, 140, 6);
+
+    // Painel do usuário (canto superior direito)
+    const cx = 1690;
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#14171C";
+    ctx.font = "bold 34px Arial, sans-serif";
+    ctx.fillText(cortarTexto(ctx, meta.nome, 380), cx, 70);
+    const raio = 100, cy = 190;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, raio, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    if (avatar) {
+      desenharCover(ctx, avatar, cx - raio, cy - raio, raio * 2, raio * 2);
+    } else {
+      ctx.fillStyle = "#D97B29";
+      ctx.fillRect(cx - raio, cy - raio, raio * 2, raio * 2);
+      ctx.fillStyle = "#FFFFFF";
+      ctx.font = "bold 80px Arial, sans-serif";
+      ctx.fillText(meta.nome.charAt(0).toUpperCase(), cx, cy + 28);
+    }
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(cx, cy, raio, 0, Math.PI * 2);
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#D97B29";
+    ctx.beginPath();
+    ctx.arc(cx, cy, raio + 4, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Card de contadores
+    const kx = 1500, ky = 330, kw = 380, kh = 330;
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(kx, ky, kw, kh);
+    ctx.strokeStyle = "#DDDDDD";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(kx, ky, kw, kh);
+    ctx.fillStyle = "#16A34A";
+    ctx.font = "bold 110px Arial, sans-serif";
+    ctx.fillText(String(meta.concluidas), cx, ky + 125);
+    ctx.fillStyle = "#555555";
+    ctx.font = "26px Arial, sans-serif";
+    ctx.fillText("concluídas (antes e depois)", cx, ky + 165);
+    ctx.fillStyle = "#EA8A1E";
+    ctx.font = "bold 110px Arial, sans-serif";
+    ctx.fillText(String(meta.abertas), cx, ky + 285);
+    ctx.fillStyle = "#555555";
+    ctx.font = "26px Arial, sans-serif";
+    ctx.fillText("ainda abertas", cx, ky + 318 - 4);
+
+    // Cards das atividades
+    const itens = lista.slice(pg * POR_PAG, pg * POR_PAG + POR_PAG);
+    const idx0 = pg * POR_PAG;
+    const g = escolherGrade(itens.length, GW, GH, GAP);
+    const cw = (GW - (g.cols - 1) * GAP) / g.cols;
+    const ch = (GH - (g.rows - 1) * GAP) / g.rows;
+    const tit = Math.max(16, Math.min(30, cw / 14));
+    const cab = tit * 2.7;
+    ctx.textAlign = "left";
+    itens.forEach((a, k) => {
+      const col = k % g.cols;
+      const lin = Math.floor(k / g.cols);
+      const x = GX + col * (cw + GAP);
+      const y = GY + lin * (ch + GAP);
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(x, y, cw, ch);
+      ctx.strokeStyle = "#DDDDDD";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, y, cw, ch);
+      const fechada = !!a.foto_depois;
+      ctx.fillStyle = "#14171C";
+      ctx.font = `bold ${tit}px Arial, sans-serif`;
+      ctx.fillText(cortarTexto(ctx, tituloComCategoria(a), cw - 28), x + 14, y + tit + 8);
+      ctx.font = `${tit * 0.8}px Arial, sans-serif`;
+      ctx.fillStyle = "#555555";
+      ctx.fillText(isoParaBR(a.data), x + 14, y + tit * 2 + 8);
+      ctx.fillStyle = fechada ? "#16A34A" : "#EA8A1E";
+      ctx.font = `bold ${tit * 0.8}px Arial, sans-serif`;
+      ctx.textAlign = "right";
+      ctx.fillText(fechada ? "FECHADA" : "ABERTA", x + cw - 14, y + tit * 2 + 8);
+      ctx.textAlign = "left";
+      const fw = g.fit;
+      const fh = g.fit * 3 / 4;
+      const total2 = fw * 2 + 14;
+      const ix = x + (cw - total2) / 2;
+      const iy = y + cab + Math.max(0, (ch - cab - fh - 10) / 2);
+      desenharCover(ctx, imgs[idx0 + k].antes, ix, iy, fw, fh);
+      desenharCover(ctx, imgs[idx0 + k].depois, ix + fw + 14, iy, fw, fh);
+      ctx.strokeStyle = "#E5E5E5";
+      ctx.strokeRect(ix, iy, fw, fh);
+      ctx.strokeRect(ix + fw + 14, iy, fw, fh);
+    });
+    ctx.fillStyle = "#8C8C8C";
+    ctx.font = "22px Arial, sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(`Página ${pg + 1}/${total}`, W - 40, H - 24);
+    ctx.textAlign = "left";
+    paginas.push(canvas);
+  }
+  return paginas;
 }
 
 // Seletor de foto: "Registrar foto" (câmera) + "Anexar foto" (galeria)
@@ -1334,6 +1521,10 @@ function PaginaAtividades({ usuario, p, tema }) {
   const [detalheId, setDetalheId] = useState(null);
   const [enviandoDepois, setEnviandoDepois] = useState(false);
   const [confirmaExcluir, setConfirmaExcluir] = useState(false);
+  const [categoriaNova, setCategoriaNova] = useState(null);
+  const [filtroCat, setFiltroCat] = useState("todas"); // todas | 5S | Kaizen | Anomalia | sem
+  const [filtroDe, setFiltroDe] = useState("");
+  const [filtroAte, setFiltroAte] = useState("");
   const [selecionando, setSelecionando] = useState(false);
   const [selecionados, setSelecionados] = useState([]);
   const [shareAberto, setShareAberto] = useState(false);
@@ -1342,12 +1533,22 @@ function PaginaAtividades({ usuario, p, tema }) {
   const [shareErro, setShareErro] = useState(null);
   const [shareArquivos, setShareArquivos] = useState(null); // [{ blob, nome }]
 
+  const listaFiltrada = lista.filter((a) => {
+    const d = String(a.data).slice(0, 10);
+    if (filtroDe && d < filtroDe) return false;
+    if (filtroAte && d > filtroAte) return false;
+    if (filtroCat === "sem") return !a.categoria;
+    if (filtroCat !== "todas" && a.categoria !== filtroCat) return false;
+    return true;
+  });
+  const filtrando = filtroCat !== "todas" || !!filtroDe || !!filtroAte;
+
   function alternarSelecao(id) {
     setSelecionados((ant) => (ant.indexOf(id) >= 0 ? ant.filter((x) => x !== id) : ant.concat([id])));
   }
   function selecionarHoje() {
     const hoje = hojeISOLocal();
-    setSelecionados(lista.filter((a) => String(a.data).slice(0, 10) === hoje).map((a) => a.id));
+    setSelecionados(listaFiltrada.filter((a) => String(a.data).slice(0, 10) === hoje).map((a) => a.id));
     setSelecionando(true);
   }
   function abrirShare(ids) {
@@ -1403,6 +1604,64 @@ function PaginaAtividades({ usuario, p, tema }) {
       }, i * 400);
     });
   }
+  const [relAberto, setRelAberto] = useState(false);
+  const [relTipo, setRelTipo] = useState("semanal");
+  const [relPeriodo, setRelPeriodo] = useState("atual");
+  const [relFormato, setRelFormato] = useState("png");
+  const [relGerando, setRelGerando] = useState(false);
+  const [relErro, setRelErro] = useState(null);
+
+  function abrirRelatorios() {
+    setRelTipo("semanal");
+    setRelPeriodo("atual");
+    setRelFormato("png");
+    setRelErro(null);
+    setShareArquivos(null);
+    setRelAberto(true);
+  }
+  async function gerarRelatorio() {
+    setRelGerando(true);
+    setRelErro(null);
+    setShareArquivos(null);
+    try {
+      const per = calcularPeriodo(relTipo, relPeriodo);
+      const doUsuario = lista
+        .filter((a) => a.usuario_id === usuario.id && String(a.data).slice(0, 10) >= per.inicio && String(a.data).slice(0, 10) <= per.fim)
+        .sort((x, y) => (String(x.data) < String(y.data) ? -1 : String(x.data) > String(y.data) ? 1 : 0));
+      if (doUsuario.length === 0) throw new Error("Você não tem atividades registradas nesse período.");
+      const concluidas = doUsuario.filter((a) => a.foto_antes && a.foto_depois).length;
+      const meta = {
+        titulo: relTipo === "semanal" ? "Relatório semanal de atividades" : "Relatório mensal de atividades",
+        periodoRotulo: per.rotulo,
+        nome: `${usuario.nome} ${usuario.sobrenome}`,
+        fotoUrl: usuario.foto_url || null,
+        concluidas: concluidas,
+        abertas: doUsuario.length - concluidas,
+        porPagina: relTipo === "semanal" ? 24 : 12,
+      };
+      const paginas = await desenharSlidesRelatorio(doUsuario, meta);
+      const base = `Relatorio_${relTipo}_${per.inicio}`;
+      const arquivos = [];
+      if (relFormato === "pdf") {
+        if (!window.jspdf || !window.jspdf.jsPDF) throw new Error("Biblioteca de PDF não carregou. Recarregue o app.");
+        const doc = new window.jspdf.jsPDF({ orientation: "landscape", unit: "px", format: [1920, 1080] });
+        for (let i = 0; i < paginas.length; i++) {
+          if (i > 0) doc.addPage([1920, 1080], "landscape");
+          doc.addImage(paginas[i].toDataURL("image/jpeg", 0.85), "JPEG", 0, 0, 1920, 1080);
+        }
+        arquivos.push({ blob: doc.output("blob"), nome: `${base}.pdf`, tipo: "application/pdf" });
+      } else {
+        for (let i = 0; i < paginas.length; i++) {
+          const b = await canvasParaBlob(paginas[i], "image/png");
+          arquivos.push({ blob: b, nome: paginas.length > 1 ? `${base}_${i + 1}.png` : `${base}.png`, tipo: "image/png" });
+        }
+      }
+      setShareArquivos(arquivos);
+    } catch (e) {
+      setRelErro(e && e.message ? e.message : "Falha ao gerar o relatório.");
+    }
+    setRelGerando(false);
+  }
   async function compartilharShare() {
     if (!shareArquivos) return;
     const files = shareArquivos.map((arq) => new File([arq.blob], arq.nome, { type: arq.tipo }));
@@ -1434,6 +1693,7 @@ function PaginaAtividades({ usuario, p, tema }) {
   function abrirNovo() {
     setTitulo("");
     setDataAtv(hojeISOLocal());
+    setCategoriaNova(null);
     setFotoAntes(null);
     setErro(null);
     setNovoAberto(true);
@@ -1448,6 +1708,7 @@ function PaginaAtividades({ usuario, p, tema }) {
   }
   async function salvarNovo() {
     if (!titulo.trim()) { setErro("Informe o título da atividade."); return; }
+    if (!categoriaNova) { setErro("Selecione a categoria da atividade."); return; }
     if (!fotoAntes) { setErro("Registre ou anexe a foto do \"antes\"."); return; }
     if (!usuario || !usuario.id) { setErro("Faça login novamente para salvar."); return; }
     setSalvando(true);
@@ -1458,6 +1719,7 @@ function PaginaAtividades({ usuario, p, tema }) {
         usuario_id: usuario.id,
         usuario_nome: `${usuario.nome} ${usuario.sobrenome}`,
         titulo: titulo.trim(),
+        categoria: categoriaNova,
         data: dataAtv,
         foto_antes: url,
       });
@@ -1533,6 +1795,13 @@ function PaginaAtividades({ usuario, p, tema }) {
       >
         <PlusCircleIcon size={18} /> Registrar nova atividade
       </button>
+      <button
+        onClick={abrirRelatorios}
+        className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-[13px] font-semibold active:scale-[0.98]"
+        style={{ background: p.superficieAlt, color: p.texto, border: `1px solid ${p.borda}` }}
+      >
+        <ClipboardList size={16} /> Relatórios semanal e mensal
+      </button>
 
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="font-mono text-[11px] font-medium uppercase tracking-wider" style={{ color: p.textoTerciario }}>
@@ -1558,16 +1827,46 @@ function PaginaAtividades({ usuario, p, tema }) {
         )}
       </div>
 
+      <div className="mb-4 rounded-2xl p-3" style={{ background: p.superficieAlt, border: `1px solid ${p.borda}` }}>
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {[["todas", "Todas"], ["5S", "5S"], ["Kaizen", "Kaizen"], ["Anomalia", "Anomalia"], ["sem", "Sem categoria"]].map((op) => (
+            <button
+              key={op[0]}
+              onClick={() => setFiltroCat(op[0])}
+              className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold"
+              style={filtroCat === op[0]
+                ? { background: op[0] === "todas" || op[0] === "sem" ? tema.accent : corCategoria(op[0]), color: "#FFFFFF" }
+                : { background: p.superficie, color: p.texto, border: `1px solid ${p.borda}` }}
+            >
+              {op[1]}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <input type="date" value={filtroDe} onChange={(e) => setFiltroDe(e.target.value)} className="min-w-0 flex-1 rounded-lg px-2 py-1.5 text-[12px] outline-none" style={{ background: p.superficie, color: p.texto, border: `1px solid ${p.borda}` }} />
+          <span className="text-[11px]" style={{ color: p.textoTerciario }}>até</span>
+          <input type="date" value={filtroAte} onChange={(e) => setFiltroAte(e.target.value)} className="min-w-0 flex-1 rounded-lg px-2 py-1.5 text-[12px] outline-none" style={{ background: p.superficie, color: p.texto, border: `1px solid ${p.borda}` }} />
+          {filtrando && (
+            <button onClick={() => { setFiltroCat("todas"); setFiltroDe(""); setFiltroAte(""); }} className="shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold" style={{ color: tema.accent }}>
+              Limpar
+            </button>
+          )}
+        </div>
+      </div>
+
       {erro && !novoAberto && !detalhe && (
         <p className="mb-3 text-[13px]" style={{ color: "#DC2626" }}>{erro}</p>
       )}
       {carregando && <p className="text-[13px]" style={{ color: p.textoSecundario }}>Carregando…</p>}
+      {!carregando && lista.length > 0 && listaFiltrada.length === 0 && (
+        <p className="text-[13px]" style={{ color: p.textoSecundario }}>Nenhuma atividade encontrada com esses filtros.</p>
+      )}
       {!carregando && lista.length === 0 && !erro && (
         <p className="text-[13px]" style={{ color: p.textoSecundario }}>Nenhuma atividade registrada ainda.</p>
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        {lista.map((a) => {
+        {listaFiltrada.map((a) => {
           const fechada = !!a.foto_depois;
           return (
             <button key={a.id} onClick={() => { if (selecionando) { alternarSelecao(a.id); } else { setErro(null); setDetalheId(a.id); } }} className="relative text-left active:scale-[0.98]">
@@ -1577,8 +1876,11 @@ function PaginaAtividades({ usuario, p, tema }) {
                   {isoParaBR(a.data)}
                 </span>
               </div>
-              <div className="mb-1 text-[11px] font-bold" style={{ color: fechada ? "#16A34A" : "#EA8A1E" }}>
-                {fechada ? "fechada" : "aberta"}
+              <div className="mb-1 flex items-center gap-1.5 text-[11px] font-bold">
+                <span style={{ color: fechada ? "#16A34A" : "#EA8A1E" }}>{fechada ? "fechada" : "aberta"}</span>
+                {a.categoria && (
+                  <span className="rounded px-1.5 py-0.5 text-[10px] text-white" style={{ background: corCategoria(a.categoria) }}>{a.categoria}</span>
+                )}
               </div>
               <div className="overflow-hidden rounded-2xl" style={{ border: `1px solid ${p.borda}`, background: p.superficieAlt }}>
                 <img src={a.foto_antes} alt={a.titulo} loading="lazy" className="h-32 w-full object-cover" />
@@ -1595,6 +1897,72 @@ function PaginaAtividades({ usuario, p, tema }) {
           );
         })}
       </div>
+
+      {relAberto && (
+        <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center" style={{ background: "rgba(0,0,0,0.55)" }}>
+          <div className="w-full max-w-md rounded-t-3xl p-5 sm:rounded-3xl" style={{ background: p.superficie, color: p.texto, border: `1px solid ${p.borda}` }}>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-[16px] font-semibold">Relatório de atividades</h3>
+              {!relGerando && (
+                <button onClick={() => setRelAberto(false)} style={{ color: p.textoSecundario }}><X size={20} /></button>
+              )}
+            </div>
+            {!shareArquivos && (
+              <>
+                {[
+                  { rotulo: "Tipo", valor: relTipo, set: setRelTipo, ops: [["semanal", "Semanal"], ["mensal", "Mensal"]] },
+                  { rotulo: "Período", valor: relPeriodo, set: setRelPeriodo, ops: [["atual", relTipo === "semanal" ? "Esta semana" : "Este mês"], ["anterior", relTipo === "semanal" ? "Semana passada" : "Mês passado"]] },
+                  { rotulo: "Formato", valor: relFormato, set: setRelFormato, ops: [["png", "PNG 1920x1080"], ["pdf", "PDF"]] },
+                ].map((grupo) => (
+                  <div key={grupo.rotulo} className="mb-3">
+                    <div className="mb-1 text-[12px] font-semibold" style={{ color: p.textoSecundario }}>{grupo.rotulo}</div>
+                    <div className="flex gap-2">
+                      {grupo.ops.map((op) => (
+                        <button
+                          key={op[0]}
+                          onClick={() => grupo.set(op[0])}
+                          disabled={relGerando}
+                          className="flex-1 rounded-xl py-2.5 text-[13px] font-semibold"
+                          style={grupo.valor === op[0] ? { background: tema.accent, color: "#FFFFFF" } : { background: p.superficieAlt, color: p.texto, border: `1px solid ${p.borda}` }}
+                        >
+                          {op[1]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <p className="mb-3 text-[11px]" style={{ color: p.textoTerciario }}>
+                  O relatório inclui apenas as atividades registradas por você.
+                </p>
+                {relErro && <p className="mb-3 text-[13px]" style={{ color: "#DC2626" }}>{relErro}</p>}
+                <button
+                  onClick={gerarRelatorio}
+                  disabled={relGerando}
+                  className="w-full rounded-2xl py-3.5 text-[14px] font-semibold"
+                  style={{ background: tema.gradient, color: "#FFFFFF", opacity: relGerando ? 0.7 : 1 }}
+                >
+                  {relGerando ? "Gerando…" : "Gerar relatório"}
+                </button>
+              </>
+            )}
+            {shareArquivos && (
+              <>
+                <p className="mb-4 text-[13px]" style={{ color: p.textoSecundario }}>
+                  {shareArquivos.length} arquivo(s) pronto(s): {shareArquivos[0].nome}{shareArquivos.length > 1 ? " e outros" : ""}
+                </p>
+                <div className="flex gap-2">
+                  <button onClick={compartilharShare} className="flex flex-1 items-center justify-center gap-2 rounded-2xl py-3 text-[14px] font-semibold" style={{ background: tema.gradient, color: "#FFFFFF" }}>
+                    <Send size={16} /> Compartilhar
+                  </button>
+                  <button onClick={baixarShare} className="flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-[14px] font-medium" style={{ background: p.superficieAlt, color: p.texto, border: `1px solid ${p.borda}` }}>
+                    <Download size={16} /> Baixar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {selecionando && selecionados.length > 0 && !shareAberto && (
         <div className="fixed bottom-4 left-0 right-0 z-[60] flex justify-center px-5">
@@ -1686,6 +2054,19 @@ function PaginaAtividades({ usuario, p, tema }) {
                 style={campoEstilo}
               />
             </div>
+            <div className="mb-1 mt-3 text-[12px] font-semibold" style={{ color: p.textoSecundario }}>Categoria</div>
+            <div className="mb-1 flex gap-2">
+              {CATEGORIAS_ATV.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCategoriaNova(c)}
+                  className="flex-1 rounded-xl py-2.5 text-[13px] font-semibold"
+                  style={categoriaNova === c ? { background: corCategoria(c), color: "#FFFFFF" } : campoEstilo}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
             <div className="mb-1 mt-3 text-[12px] font-semibold" style={{ color: p.textoSecundario }}>Foto do ANTES</div>
             {fotoAntes && (
               <div className="mb-2 overflow-hidden rounded-2xl" style={{ border: `1px solid ${p.borda}` }}>
@@ -1731,6 +2112,24 @@ function PaginaAtividades({ usuario, p, tema }) {
               </span>
             </p>
 
+            <div className="mb-1 text-[12px] font-semibold" style={{ color: p.textoSecundario }}>Categoria</div>
+            <div className="mb-3 flex gap-2">
+              {CATEGORIAS_ATV.map((c) => (
+                <button
+                  key={c}
+                  disabled={!podeEditar}
+                  onClick={async () => {
+                    setErro(null);
+                    try { await supaAtualizarAtividade(detalhe.id, { categoria: c }); await carregar(); }
+                    catch (e) { setErro(e && e.message ? e.message : "Falha ao salvar a categoria."); }
+                  }}
+                  className="flex-1 rounded-xl py-2 text-[12px] font-semibold"
+                  style={detalhe.categoria === c ? { background: corCategoria(c), color: "#FFFFFF" } : { background: p.superficieAlt, color: p.texto, border: `1px solid ${p.borda}` }}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
             <button
               onClick={() => abrirShare([detalhe.id])}
               className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-[13px] font-semibold"
