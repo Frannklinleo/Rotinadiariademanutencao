@@ -1175,6 +1175,119 @@ async function supaExcluirAtividade(id) {
   return supaFetch(`/atividades_registro?id=eq.${id}`, { method: "DELETE" });
 }
 
+
+// ── Compartilhar atividades (PDF / PNG) ─────────────────────────────────────
+function carregarImagemCors(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+function desenharCover(ctx, img, x, y, w, h) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  if (img) {
+    const esc = Math.max(w / img.width, h / img.height);
+    const dw = img.width * esc;
+    const dh = img.height * esc;
+    ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+  } else {
+    ctx.fillStyle = "#F1F1F1";
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = "#9A9A9A";
+    ctx.font = "26px Arial, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("sem foto", x + w / 2, y + h / 2);
+    ctx.textAlign = "left";
+  }
+  ctx.restore();
+}
+function cortarTexto(ctx, texto, larguraMax) {
+  let t = String(texto);
+  if (ctx.measureText(t).width <= larguraMax) return t;
+  while (t.length > 1 && ctx.measureText(t + "…").width > larguraMax) t = t.slice(0, -1);
+  return t + "…";
+}
+// Monta páginas (proporção A4, 1080x1528), 3 atividades por página
+async function desenharPaginasAtividades(lista, rotuloUsuario) {
+  const imgs = [];
+  for (const a of lista) {
+    const antes = await carregarImagemCors(a.foto_antes);
+    const depois = a.foto_depois ? await carregarImagemCors(a.foto_depois) : null;
+    imgs.push({ antes, depois });
+  }
+  const W = 1080, H = 1528, POR_PAG = 3, TOPO = 150, M = 40;
+  const alturaBloco = Math.floor((H - TOPO - 70) / POR_PAG);
+  const total = Math.max(1, Math.ceil(lista.length / POR_PAG));
+  const paginas = [];
+  for (let pg = 0; pg < total; pg++) {
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#14171C";
+    ctx.fillRect(0, 0, W, 110);
+    ctx.fillStyle = "#FFFFFF";
+    ctx.textBaseline = "alphabetic";
+    ctx.font = "bold 40px Arial, sans-serif";
+    ctx.fillText("Registro de atividades - Antes e Depois", M, 52);
+    ctx.font = "26px Arial, sans-serif";
+    ctx.fillText(`${rotuloUsuario}  |  ${lista.length} atividade(s)`, M, 92);
+    for (let k = 0; k < POR_PAG; k++) {
+      const idx = pg * POR_PAG + k;
+      if (idx >= lista.length) break;
+      const a = lista[idx];
+      const y0 = TOPO + k * alturaBloco;
+      const fechada = !!a.foto_depois;
+      ctx.fillStyle = "#14171C";
+      ctx.font = "bold 32px Arial, sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(cortarTexto(ctx, a.titulo, W - M * 2 - 330), M, y0 + 30);
+      ctx.font = "26px Arial, sans-serif";
+      ctx.fillStyle = "#555555";
+      ctx.textAlign = "right";
+      ctx.fillText(isoParaBR(a.data), W - M, y0 + 30);
+      ctx.fillStyle = fechada ? "#16A34A" : "#EA8A1E";
+      ctx.font = "bold 24px Arial, sans-serif";
+      ctx.fillText(fechada ? "FECHADA" : "ABERTA", W - M - 150, y0 + 30);
+      ctx.textAlign = "left";
+      const gap = 20;
+      const iw = (W - M * 2 - gap) / 2;
+      const ih = alturaBloco - 100;
+      const yi = y0 + 74;
+      ctx.fillStyle = "#D97B29";
+      ctx.font = "bold 22px Arial, sans-serif";
+      ctx.fillText("ANTES", M, yi - 10);
+      ctx.fillText("DEPOIS", M + iw + gap, yi - 10);
+      desenharCover(ctx, imgs[idx].antes, M, yi, iw, ih);
+      desenharCover(ctx, imgs[idx].depois, M + iw + gap, yi, iw, ih);
+      ctx.strokeStyle = "#DDDDDD";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(M, yi, iw, ih);
+      ctx.strokeRect(M + iw + gap, yi, iw, ih);
+    }
+    ctx.fillStyle = "#8C8C8C";
+    ctx.font = "22px Arial, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(`Página ${pg + 1}/${total}`, W / 2, H - 24);
+    ctx.textAlign = "left";
+    paginas.push(canvas);
+  }
+  return paginas;
+}
+function canvasParaBlob(canvas, tipo, qualidade) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Falha ao gerar imagem."))), tipo, qualidade);
+  });
+}
+
 // Seletor de foto: "Registrar foto" (câmera) + "Anexar foto" (galeria)
 function BotoesFoto({ onArquivo, desabilitado, p, tema }) {
   const refCam = useRef(null);
@@ -1221,6 +1334,89 @@ function PaginaAtividades({ usuario, p, tema }) {
   const [detalheId, setDetalheId] = useState(null);
   const [enviandoDepois, setEnviandoDepois] = useState(false);
   const [confirmaExcluir, setConfirmaExcluir] = useState(false);
+  const [selecionando, setSelecionando] = useState(false);
+  const [selecionados, setSelecionados] = useState([]);
+  const [shareAberto, setShareAberto] = useState(false);
+  const [shareFormato, setShareFormato] = useState("pdf");
+  const [shareGerando, setShareGerando] = useState(false);
+  const [shareErro, setShareErro] = useState(null);
+  const [shareArquivos, setShareArquivos] = useState(null); // [{ blob, nome }]
+
+  function alternarSelecao(id) {
+    setSelecionados((ant) => (ant.indexOf(id) >= 0 ? ant.filter((x) => x !== id) : ant.concat([id])));
+  }
+  function selecionarHoje() {
+    const hoje = hojeISOLocal();
+    setSelecionados(lista.filter((a) => String(a.data).slice(0, 10) === hoje).map((a) => a.id));
+    setSelecionando(true);
+  }
+  function abrirShare(ids) {
+    setSelecionados(ids);
+    setShareFormato("pdf");
+    setShareArquivos(null);
+    setShareErro(null);
+    setShareAberto(true);
+  }
+  async function gerarShare() {
+    const escolhidas = lista.filter((a) => selecionados.indexOf(a.id) >= 0);
+    if (escolhidas.length === 0) { setShareErro("Nenhuma atividade selecionada."); return; }
+    setShareGerando(true);
+    setShareErro(null);
+    setShareArquivos(null);
+    try {
+      const rotulo = `${usuario.nome} ${usuario.sobrenome}`;
+      const paginas = await desenharPaginasAtividades(escolhidas, rotulo);
+      const base = `Atividades_${hojeISOLocal()}`;
+      const arquivos = [];
+      if (shareFormato === "pdf") {
+        if (!window.jspdf || !window.jspdf.jsPDF) throw new Error("Biblioteca de PDF não carregou. Recarregue o app.");
+        const doc = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
+        for (let i = 0; i < paginas.length; i++) {
+          if (i > 0) doc.addPage();
+          doc.addImage(paginas[i].toDataURL("image/jpeg", 0.8), "JPEG", 0, 0, 210, 297);
+        }
+        arquivos.push({ blob: doc.output("blob"), nome: `${base}.pdf`, tipo: "application/pdf" });
+      } else {
+        for (let i = 0; i < paginas.length; i++) {
+          const b = await canvasParaBlob(paginas[i], "image/png");
+          arquivos.push({ blob: b, nome: paginas.length > 1 ? `${base}_${i + 1}.png` : `${base}.png`, tipo: "image/png" });
+        }
+      }
+      setShareArquivos(arquivos);
+    } catch (e) {
+      setShareErro(e && e.message ? e.message : "Falha ao gerar o arquivo.");
+    }
+    setShareGerando(false);
+  }
+  function baixarShare() {
+    if (!shareArquivos) return;
+    shareArquivos.forEach((arq, i) => {
+      setTimeout(() => {
+        const url = URL.createObjectURL(arq.blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = arq.nome;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+      }, i * 400);
+    });
+  }
+  async function compartilharShare() {
+    if (!shareArquivos) return;
+    const files = shareArquivos.map((arq) => new File([arq.blob], arq.nome, { type: arq.tipo }));
+    try {
+      if (navigator.canShare && navigator.canShare({ files: files })) {
+        await navigator.share({ files: files, title: "Registro de atividades" });
+        return;
+      }
+      baixarShare();
+    } catch (e) {
+      if (e && e.name === "AbortError") return;
+      baixarShare();
+    }
+  }
 
   async function carregar() {
     setCarregando(true);
@@ -1338,8 +1534,28 @@ function PaginaAtividades({ usuario, p, tema }) {
         <PlusCircleIcon size={18} /> Registrar nova atividade
       </button>
 
-      <div className="mb-3 font-mono text-[11px] font-medium uppercase tracking-wider" style={{ color: p.textoTerciario }}>
-        Registros
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="font-mono text-[11px] font-medium uppercase tracking-wider" style={{ color: p.textoTerciario }}>
+          Registros
+        </div>
+        {lista.length > 0 && (
+          <div className="flex gap-2">
+            <button
+              onClick={selecionarHoje}
+              className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold"
+              style={{ background: p.superficieAlt, color: p.texto, border: `1px solid ${p.borda}` }}
+            >
+              Selecionar hoje
+            </button>
+            <button
+              onClick={() => { setSelecionando(!selecionando); setSelecionados([]); }}
+              className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold"
+              style={selecionando ? { background: tema.accent, color: "#FFFFFF" } : { background: p.superficieAlt, color: p.texto, border: `1px solid ${p.borda}` }}
+            >
+              {selecionando ? "Cancelar" : "Selecionar"}
+            </button>
+          </div>
+        )}
       </div>
 
       {erro && !novoAberto && !detalhe && (
@@ -1354,7 +1570,7 @@ function PaginaAtividades({ usuario, p, tema }) {
         {lista.map((a) => {
           const fechada = !!a.foto_depois;
           return (
-            <button key={a.id} onClick={() => { setErro(null); setDetalheId(a.id); }} className="text-left active:scale-[0.98]">
+            <button key={a.id} onClick={() => { if (selecionando) { alternarSelecao(a.id); } else { setErro(null); setDetalheId(a.id); } }} className="relative text-left active:scale-[0.98]">
               <div className="mb-1 flex items-start justify-between gap-1">
                 <span className="line-clamp-2 text-[12px] font-semibold leading-tight" style={{ color: p.texto }}>{a.titulo}</span>
                 <span className="shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px]" style={{ background: p.superficieAlt, color: p.textoSecundario, border: `1px solid ${p.borda}` }}>
@@ -1367,10 +1583,84 @@ function PaginaAtividades({ usuario, p, tema }) {
               <div className="overflow-hidden rounded-2xl" style={{ border: `1px solid ${p.borda}`, background: p.superficieAlt }}>
                 <img src={a.foto_antes} alt={a.titulo} loading="lazy" className="h-32 w-full object-cover" />
               </div>
+              {selecionando && (
+                <div
+                  className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-full"
+                  style={{ background: selecionados.indexOf(a.id) >= 0 ? tema.accent : "rgba(0,0,0,0.45)", border: "2px solid #FFFFFF" }}
+                >
+                  {selecionados.indexOf(a.id) >= 0 && <Check size={15} color="#FFFFFF" strokeWidth={3} />}
+                </div>
+              )}
             </button>
           );
         })}
       </div>
+
+      {selecionando && selecionados.length > 0 && !shareAberto && (
+        <div className="fixed bottom-4 left-0 right-0 z-[60] flex justify-center px-5">
+          <button
+            onClick={() => abrirShare(selecionados)}
+            className="flex w-full max-w-md items-center justify-center gap-2 rounded-2xl py-4 text-[14px] font-semibold shadow-2xl"
+            style={{ background: tema.gradient, color: "#FFFFFF" }}
+          >
+            <Send size={17} /> Compartilhar ({selecionados.length})
+          </button>
+        </div>
+      )}
+
+      {shareAberto && (
+        <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center" style={{ background: "rgba(0,0,0,0.55)" }}>
+          <div className="w-full max-w-md rounded-t-3xl p-5 sm:rounded-3xl" style={{ background: p.superficie, color: p.texto, border: `1px solid ${p.borda}` }}>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-[16px] font-semibold">Compartilhar {selecionados.length} atividade(s)</h3>
+              {!shareGerando && (
+                <button onClick={() => setShareAberto(false)} style={{ color: p.textoSecundario }}><X size={20} /></button>
+              )}
+            </div>
+            {!shareArquivos && (
+              <>
+                <div className="mb-4 flex gap-2">
+                  {["pdf", "png"].map((fmt) => (
+                    <button
+                      key={fmt}
+                      onClick={() => setShareFormato(fmt)}
+                      disabled={shareGerando}
+                      className="flex-1 rounded-xl py-2.5 text-[13px] font-semibold uppercase"
+                      style={shareFormato === fmt ? { background: tema.accent, color: "#FFFFFF" } : { background: p.superficieAlt, color: p.texto, border: `1px solid ${p.borda}` }}
+                    >
+                      {fmt}
+                    </button>
+                  ))}
+                </div>
+                {shareErro && <p className="mb-3 text-[13px]" style={{ color: "#DC2626" }}>{shareErro}</p>}
+                <button
+                  onClick={gerarShare}
+                  disabled={shareGerando}
+                  className="w-full rounded-2xl py-3.5 text-[14px] font-semibold"
+                  style={{ background: tema.gradient, color: "#FFFFFF", opacity: shareGerando ? 0.7 : 1 }}
+                >
+                  {shareGerando ? "Gerando…" : "Gerar arquivo"}
+                </button>
+              </>
+            )}
+            {shareArquivos && (
+              <>
+                <p className="mb-4 text-[13px]" style={{ color: p.textoSecundario }}>
+                  {shareArquivos.length} arquivo(s) pronto(s): {shareArquivos[0].nome}{shareArquivos.length > 1 ? " e outros" : ""}
+                </p>
+                <div className="flex gap-2">
+                  <button onClick={compartilharShare} className="flex flex-1 items-center justify-center gap-2 rounded-2xl py-3 text-[14px] font-semibold" style={{ background: tema.gradient, color: "#FFFFFF" }}>
+                    <Send size={16} /> Compartilhar
+                  </button>
+                  <button onClick={baixarShare} className="flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-[14px] font-medium" style={{ background: p.superficieAlt, color: p.texto, border: `1px solid ${p.borda}` }}>
+                    <Download size={16} /> Baixar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Modal: nova atividade */}
       {novoAberto && (
@@ -1440,6 +1730,14 @@ function PaginaAtividades({ usuario, p, tema }) {
                 {detalhe.foto_depois ? "fechada" : "aberta"}
               </span>
             </p>
+
+            <button
+              onClick={() => abrirShare([detalhe.id])}
+              className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-[13px] font-semibold"
+              style={{ background: tema.accentSoft, color: tema.accent, border: `1px solid ${tema.accentBorder}` }}
+            >
+              <Send size={15} /> Compartilhar atividade
+            </button>
 
             <div className="mb-1 text-[12px] font-semibold" style={{ color: p.textoSecundario }}>ANTES</div>
             <img src={detalhe.foto_antes} alt="Antes" className="mb-2 w-full rounded-2xl object-cover" style={{ border: `1px solid ${p.borda}` }} />
