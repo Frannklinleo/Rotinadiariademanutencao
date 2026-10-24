@@ -1098,12 +1098,442 @@ function ProgressRing({ progress, size = 44, stroke = 4, color = "#F5A623", trac
 // MENU LATERAL
 // ----------------------------------------------------------------------------
 
+
+// ── Registro de atividades (antes/depois) ───────────────────────────────────
+function hojeISOLocal() {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${dia}`;
+}
+function isoParaBR(iso) {
+  if (!iso) return "";
+  const parte = String(iso).slice(0, 10).split("-");
+  return parte.length === 3 ? `${parte[2]}/${parte[1]}/${parte[0]}` : iso;
+}
+// Reduz a foto (largura máx. 800 px, JPEG 0,7) para não sobrecarregar o armazenamento
+function comprimirFotoUpload(file, larguraMax, qualidade) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const escala = Math.min(1, larguraMax / img.width);
+      const w = Math.max(1, Math.round(img.width * escala));
+      const h = Math.max(1, Math.round(img.height * escala));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("Não foi possível processar a foto."));
+      }, "image/jpeg", qualidade);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Não foi possível abrir a foto selecionada."));
+    };
+    img.src = url;
+  });
+}
+async function supaUploadFotoAtividade(file) {
+  const blob = await comprimirFotoUpload(file, 800, 0.7);
+  const nome = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const res = await fetch(`${SUPA_URL}/storage/v1/object/fotos-atividades/${nome}`, {
+    method: "POST",
+    headers: {
+      "apikey": SUPA_KEY,
+      "Authorization": `Bearer ${SUPA_KEY}`,
+      "Content-Type": "image/jpeg",
+      "x-upsert": "true",
+    },
+    body: blob,
+  });
+  if (!res.ok) {
+    let detalhe = "";
+    try { detalhe = await res.text(); } catch (_) {}
+    throw new Error(`Upload falhou (${res.status}): ${detalhe || "verifique se o bucket 'fotos-atividades' existe e é público"}`);
+  }
+  return `${SUPA_URL}/storage/v1/object/public/fotos-atividades/${nome}`;
+}
+async function supaListarAtividades() {
+  return supaFetch("/atividades_registro?select=*&order=data.desc,criado_em.desc&limit=300");
+}
+async function supaCriarAtividade(reg) {
+  const r = await supaFetch("/atividades_registro", { method: "POST", body: JSON.stringify(reg) });
+  return r && r[0];
+}
+async function supaAtualizarAtividade(id, campos) {
+  const r = await supaFetch(`/atividades_registro?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(campos) });
+  return r && r[0];
+}
+async function supaExcluirAtividade(id) {
+  return supaFetch(`/atividades_registro?id=eq.${id}`, { method: "DELETE" });
+}
+
+// Seletor de foto: "Registrar foto" (câmera) + "Anexar foto" (galeria)
+function BotoesFoto({ onArquivo, desabilitado, p, tema }) {
+  const refCam = useRef(null);
+  const refGal = useRef(null);
+  function escolher(e) {
+    const arq = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (arq) onArquivo(arq);
+  }
+  const estilo = { background: p.superficieAlt, color: p.texto, border: `1px solid ${p.borda}` };
+  return (
+    <div className="flex gap-2">
+      <input ref={refCam} type="file" accept="image/*" capture="environment" className="hidden" onChange={escolher} />
+      <input ref={refGal} type="file" accept="image/*" className="hidden" onChange={escolher} />
+      <button
+        disabled={desabilitado}
+        onClick={() => refCam.current && refCam.current.click()}
+        className="flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-[13px] font-semibold"
+        style={estilo}
+      >
+        <Camera size={16} /> Registrar foto
+      </button>
+      <button
+        disabled={desabilitado}
+        onClick={() => refGal.current && refGal.current.click()}
+        className="flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-[13px] font-semibold"
+        style={estilo}
+      >
+        <ImageIcon size={16} /> Anexar foto
+      </button>
+    </div>
+  );
+}
+
+function PaginaAtividades({ usuario, p, tema }) {
+  const [lista, setLista] = useState([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState(null);
+  const [novoAberto, setNovoAberto] = useState(false);
+  const [titulo, setTitulo] = useState("");
+  const [dataAtv, setDataAtv] = useState(hojeISOLocal());
+  const [fotoAntes, setFotoAntes] = useState(null); // { file, preview }
+  const [salvando, setSalvando] = useState(false);
+  const [detalheId, setDetalheId] = useState(null);
+  const [enviandoDepois, setEnviandoDepois] = useState(false);
+  const [confirmaExcluir, setConfirmaExcluir] = useState(false);
+
+  async function carregar() {
+    setCarregando(true);
+    setErro(null);
+    try {
+      const dados = await supaListarAtividades();
+      setLista(dados || []);
+    } catch (e) {
+      setErro(e && e.message ? e.message : "Falha ao carregar atividades.");
+    }
+    setCarregando(false);
+  }
+  useEffect(() => { carregar(); }, []);
+
+  function abrirNovo() {
+    setTitulo("");
+    setDataAtv(hojeISOLocal());
+    setFotoAntes(null);
+    setErro(null);
+    setNovoAberto(true);
+  }
+  function escolherAntes(arq) {
+    if (fotoAntes && fotoAntes.preview) URL.revokeObjectURL(fotoAntes.preview);
+    setFotoAntes({ file: arq, preview: URL.createObjectURL(arq) });
+  }
+  function excluirAntesLocal() {
+    if (fotoAntes && fotoAntes.preview) URL.revokeObjectURL(fotoAntes.preview);
+    setFotoAntes(null);
+  }
+  async function salvarNovo() {
+    if (!titulo.trim()) { setErro("Informe o título da atividade."); return; }
+    if (!fotoAntes) { setErro("Registre ou anexe a foto do \"antes\"."); return; }
+    if (!usuario || !usuario.id) { setErro("Faça login novamente para salvar."); return; }
+    setSalvando(true);
+    setErro(null);
+    try {
+      const url = await supaUploadFotoAtividade(fotoAntes.file);
+      await supaCriarAtividade({
+        usuario_id: usuario.id,
+        usuario_nome: `${usuario.nome} ${usuario.sobrenome}`,
+        titulo: titulo.trim(),
+        data: dataAtv,
+        foto_antes: url,
+      });
+      excluirAntesLocal();
+      setNovoAberto(false);
+      await carregar();
+    } catch (e) {
+      setErro(e && e.message ? e.message : "Falha ao salvar a atividade.");
+    }
+    setSalvando(false);
+  }
+
+  const detalhe = lista.find((a) => a.id === detalheId);
+  const podeEditar = !!(detalhe && usuario && (usuario.id === detalhe.usuario_id || usuario.role === "admin"));
+
+  async function trocarDepois(arq) {
+    if (!detalhe) return;
+    setEnviandoDepois(true);
+    setErro(null);
+    try {
+      const url = await supaUploadFotoAtividade(arq);
+      await supaAtualizarAtividade(detalhe.id, { foto_depois: url });
+      await carregar();
+    } catch (e) {
+      setErro(e && e.message ? e.message : "Falha ao enviar a foto do depois.");
+    }
+    setEnviandoDepois(false);
+  }
+  async function trocarAntes(arq) {
+    if (!detalhe) return;
+    setEnviandoDepois(true);
+    setErro(null);
+    try {
+      const url = await supaUploadFotoAtividade(arq);
+      await supaAtualizarAtividade(detalhe.id, { foto_antes: url });
+      await carregar();
+    } catch (e) {
+      setErro(e && e.message ? e.message : "Falha ao enviar a foto do antes.");
+    }
+    setEnviandoDepois(false);
+  }
+  async function removerDepois() {
+    if (!detalhe) return;
+    setErro(null);
+    try {
+      await supaAtualizarAtividade(detalhe.id, { foto_depois: null });
+      await carregar();
+    } catch (e) {
+      setErro(e && e.message ? e.message : "Falha ao excluir a foto.");
+    }
+  }
+  async function excluirAtividade() {
+    if (!detalhe) return;
+    setErro(null);
+    try {
+      await supaExcluirAtividade(detalhe.id);
+      setConfirmaExcluir(false);
+      setDetalheId(null);
+      await carregar();
+    } catch (e) {
+      setErro(e && e.message ? e.message : "Falha ao excluir a atividade.");
+    }
+  }
+
+  const campoEstilo = { background: p.superficieAlt, color: p.texto, border: `1px solid ${p.borda}` };
+
+  return (
+    <div className="pb-24">
+      <button
+        onClick={abrirNovo}
+        className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-[14px] font-semibold shadow-lg active:scale-[0.98]"
+        style={{ background: tema.gradient, color: "#FFFFFF" }}
+      >
+        <PlusCircleIcon size={18} /> Registrar nova atividade
+      </button>
+
+      <div className="mb-3 font-mono text-[11px] font-medium uppercase tracking-wider" style={{ color: p.textoTerciario }}>
+        Registros
+      </div>
+
+      {erro && !novoAberto && !detalhe && (
+        <p className="mb-3 text-[13px]" style={{ color: "#DC2626" }}>{erro}</p>
+      )}
+      {carregando && <p className="text-[13px]" style={{ color: p.textoSecundario }}>Carregando…</p>}
+      {!carregando && lista.length === 0 && !erro && (
+        <p className="text-[13px]" style={{ color: p.textoSecundario }}>Nenhuma atividade registrada ainda.</p>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        {lista.map((a) => {
+          const fechada = !!a.foto_depois;
+          return (
+            <button key={a.id} onClick={() => { setErro(null); setDetalheId(a.id); }} className="text-left active:scale-[0.98]">
+              <div className="mb-1 flex items-start justify-between gap-1">
+                <span className="line-clamp-2 text-[12px] font-semibold leading-tight" style={{ color: p.texto }}>{a.titulo}</span>
+                <span className="shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px]" style={{ background: p.superficieAlt, color: p.textoSecundario, border: `1px solid ${p.borda}` }}>
+                  {isoParaBR(a.data)}
+                </span>
+              </div>
+              <div className="mb-1 text-[11px] font-bold" style={{ color: fechada ? "#16A34A" : "#EA8A1E" }}>
+                {fechada ? "fechada" : "aberta"}
+              </div>
+              <div className="overflow-hidden rounded-2xl" style={{ border: `1px solid ${p.borda}`, background: p.superficieAlt }}>
+                <img src={a.foto_antes} alt={a.titulo} loading="lazy" className="h-32 w-full object-cover" />
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Modal: nova atividade */}
+      {novoAberto && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center" style={{ background: "rgba(0,0,0,0.55)" }}>
+          <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-3xl p-5 sm:rounded-3xl" style={{ background: p.superficie, color: p.texto, border: `1px solid ${p.borda}` }}>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-[16px] font-semibold">Nova atividade</h3>
+              <button onClick={() => { excluirAntesLocal(); setNovoAberto(false); }} style={{ color: p.textoSecundario }}><X size={20} /></button>
+            </div>
+            <div className="mb-2 flex gap-2">
+              <input
+                value={titulo}
+                onChange={(e) => setTitulo(e.target.value)}
+                placeholder="Título da atividade"
+                className="min-w-0 flex-1 rounded-xl px-3 py-2.5 text-[14px] outline-none"
+                style={campoEstilo}
+              />
+              <input
+                type="date"
+                value={dataAtv}
+                onChange={(e) => setDataAtv(e.target.value)}
+                className="w-[130px] rounded-xl px-2 py-2.5 text-[13px] outline-none"
+                style={campoEstilo}
+              />
+            </div>
+            <div className="mb-1 mt-3 text-[12px] font-semibold" style={{ color: p.textoSecundario }}>Foto do ANTES</div>
+            {fotoAntes && (
+              <div className="mb-2 overflow-hidden rounded-2xl" style={{ border: `1px solid ${p.borda}` }}>
+                <img src={fotoAntes.preview} alt="Antes" className="max-h-56 w-full object-cover" />
+              </div>
+            )}
+            <BotoesFoto onArquivo={escolherAntes} desabilitado={salvando} p={p} tema={tema} />
+            {fotoAntes && (
+              <p className="mt-2 text-[11px]" style={{ color: p.textoTerciario }}>
+                Para alterar, escolha outra foto. Para excluir, use o botão abaixo.
+              </p>
+            )}
+            {fotoAntes && (
+              <button onClick={excluirAntesLocal} className="mt-2 flex items-center gap-1.5 text-[12px] font-medium" style={{ color: "#DC2626" }}>
+                <Trash2 size={14} /> Excluir foto
+              </button>
+            )}
+            {erro && <p className="mt-3 text-[13px]" style={{ color: "#DC2626" }}>{erro}</p>}
+            <button
+              onClick={salvarNovo}
+              disabled={salvando}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-[14px] font-semibold"
+              style={{ background: tema.gradient, color: "#FFFFFF", opacity: salvando ? 0.7 : 1 }}
+            >
+              <Save size={16} /> {salvando ? "Salvando…" : "Salvar"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: detalhe antes/depois */}
+      {detalhe && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center" style={{ background: "rgba(0,0,0,0.55)" }}>
+          <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-3xl p-5 sm:rounded-3xl" style={{ background: p.superficie, color: p.texto, border: `1px solid ${p.borda}` }}>
+            <div className="mb-1 flex items-start justify-between gap-2">
+              <h3 className="text-[16px] font-semibold leading-tight">{detalhe.titulo}</h3>
+              <button onClick={() => { setDetalheId(null); setConfirmaExcluir(false); setErro(null); }} style={{ color: p.textoSecundario }}><X size={20} /></button>
+            </div>
+            <p className="mb-3 text-[12px]" style={{ color: p.textoSecundario }}>
+              {isoParaBR(detalhe.data)} · {detalhe.usuario_nome} ·{" "}
+              <span style={{ color: detalhe.foto_depois ? "#16A34A" : "#EA8A1E", fontWeight: 700 }}>
+                {detalhe.foto_depois ? "fechada" : "aberta"}
+              </span>
+            </p>
+
+            <div className="mb-1 text-[12px] font-semibold" style={{ color: p.textoSecundario }}>ANTES</div>
+            <img src={detalhe.foto_antes} alt="Antes" className="mb-2 w-full rounded-2xl object-cover" style={{ border: `1px solid ${p.borda}` }} />
+            {podeEditar && (
+              <div className="mb-4">
+                <BotoesFoto onArquivo={trocarAntes} desabilitado={enviandoDepois} p={p} tema={tema} />
+              </div>
+            )}
+
+            <div className="mb-1 text-[12px] font-semibold" style={{ color: p.textoSecundario }}>DEPOIS</div>
+            {detalhe.foto_depois ? (
+              <img src={detalhe.foto_depois} alt="Depois" className="mb-2 w-full rounded-2xl object-cover" style={{ border: `1px solid ${p.borda}` }} />
+            ) : (
+              <div className="mb-2 flex h-28 items-center justify-center rounded-2xl text-[12px]" style={{ background: p.superficieAlt, color: p.textoTerciario, border: `1px dashed ${p.bordaForte}` }}>
+                Ainda sem foto do depois
+              </div>
+            )}
+            {podeEditar && <BotoesFoto onArquivo={trocarDepois} desabilitado={enviandoDepois} p={p} tema={tema} />}
+            {enviandoDepois && <p className="mt-2 text-[12px]" style={{ color: p.textoSecundario }}>Enviando foto…</p>}
+            {podeEditar && detalhe.foto_depois && (
+              <button onClick={removerDepois} className="mt-2 flex items-center gap-1.5 text-[12px] font-medium" style={{ color: "#DC2626" }}>
+                <Trash2 size={14} /> Excluir foto do depois
+              </button>
+            )}
+            {erro && <p className="mt-3 text-[13px]" style={{ color: "#DC2626" }}>{erro}</p>}
+
+            {podeEditar && !confirmaExcluir && (
+              <button onClick={() => setConfirmaExcluir(true)} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-[13px] font-medium" style={{ color: "#DC2626", border: "1px solid rgba(220,38,38,0.35)" }}>
+                <Trash2 size={15} /> Excluir atividade
+              </button>
+            )}
+            {podeEditar && confirmaExcluir && (
+              <div className="mt-5 flex gap-2">
+                <button onClick={excluirAtividade} className="flex-1 rounded-xl py-2.5 text-[13px] font-semibold" style={{ background: "#DC2626", color: "#FFFFFF" }}>
+                  Confirmar exclusão
+                </button>
+                <button onClick={() => setConfirmaExcluir(false)} className="flex-1 rounded-xl py-2.5 text-[13px] font-medium" style={campoEstilo}>
+                  Cancelar
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Tela inicial: 2 opções sobre o fundo do app
+function TelaInicialModal({ usuario, onRotina, onAtividades, p, tema }) {
+  return (
+    <div
+      className="fixed inset-0 z-[90] flex items-center justify-center p-5"
+      style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)" }}
+    >
+      <div
+        className="w-full max-w-sm rounded-3xl p-6"
+        style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.18)", backdropFilter: "blur(14px)", boxShadow: "0 24px 64px rgba(0,0,0,0.5)" }}
+      >
+        <div className="mb-5 text-center">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl" style={{ background: tema.accentSoft, border: `1px solid ${tema.accentBorder}` }}>
+            <ClipboardList size={26} color={tema.accent} strokeWidth={2} />
+          </div>
+          <h2 className="text-[18px] font-bold" style={{ color: "#FFFFFF" }}>
+            {usuario ? `Olá, ${usuario.nome}!` : "Olá!"}
+          </h2>
+          <p className="mt-1 text-[13px]" style={{ color: "rgba(255,255,255,0.75)" }}>O que você quer fazer agora?</p>
+        </div>
+        <button
+          onClick={onRotina}
+          className="mb-3 flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-[14px] font-semibold active:scale-[0.98]"
+          style={{ background: tema.gradient, color: "#FFFFFF", boxShadow: `0 8px 30px ${tema.glow}` }}
+        >
+          <ClipboardList size={18} /> Realizar Rotina de Manutenção
+        </button>
+        <button
+          onClick={onAtividades}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-[14px] font-semibold active:scale-[0.98]"
+          style={{ background: "rgba(255,255,255,0.14)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.28)" }}
+        >
+          <Camera size={18} /> Registrar uma Atividade
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function MenuLateral({ aberto, onFechar, paginaAtual, onNavegar, usuario, tema, p, onSair }) {
   const [confirmandoSaida, setConfirmandoSaida] = useState(false);
 
   const itens = [
     { id: "checklist", icon: ClipboardList, label: "Checklist" },
     { id: "perfil",    icon: Settings2,     label: "Meu perfil" },
+    { id: "atividades", icon: Camera,       label: "Registro de atividades" },
     { id: "dashboard", icon: ScanLine,      label: "Dashboard" },
   ];
 
@@ -3928,7 +4358,8 @@ function MaintenanceApp() {
   }, [modoTema]);
 
   // ── Navegação ─────────────────────────────────────────────────────────────
-  const [pagina, setPagina] = useState("checklist"); // checklist | perfil | dashboard
+  const [pagina, setPagina] = useState("checklist"); // checklist | perfil | dashboard | atividades
+  const [telaInicial, setTelaInicial] = useState(true);
   const [menuAberto, setMenuAberto] = useState(false);
   const [usuarioEditando, setUsuarioEditando] = useState(null);
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
@@ -4990,6 +5421,17 @@ ${reportText}`;
       {/* Modal de login */}
       {!usuario && <LoginModal onLogin={(u) => setUsuario(u)} p={p} tema={tema} precisaRecadastrar={precisaRecadastrar} />}
 
+      {/* Tela inicial (2 opções) */}
+      {usuario && telaInicial && (
+        <TelaInicialModal
+          usuario={usuario}
+          p={p}
+          tema={tema}
+          onRotina={() => { setPagina("checklist"); setTelaInicial(false); }}
+          onAtividades={() => { setPagina("atividades"); setTelaInicial(false); }}
+        />
+      )}
+
       {/* Menu lateral */}
       <MenuLateral
         aberto={menuAberto}
@@ -5003,6 +5445,7 @@ ${reportText}`;
           localStorage.removeItem("usuario_sessao");
           setUsuario(null);
           setPagina("checklist");
+          setTelaInicial(true);
         }}
       />
 
@@ -5060,12 +5503,13 @@ ${reportText}`;
                 className="font-mono text-[11px] font-medium uppercase tracking-wider transition-colors duration-300"
                 style={{ color: tema.accent }}
               >
-                {pagina === "checklist" ? `Rotina — ${rotinaAtual.label}` : pagina === "perfil" ? "Meu perfil" : "Dashboard"}
+                {pagina === "checklist" ? `Rotina — ${rotinaAtual.label}` : pagina === "perfil" ? "Meu perfil" : pagina === "atividades" ? "Registro de atividades" : "Dashboard"}
               </div>
               <h1 className="text-[18px] font-bold leading-tight" style={{ color: p.texto }}>
                 {pagina === "checklist"
                   ? (usuario ? `${saudacao}, ${usuario.nome}!` : "Checklist")
                   : pagina === "perfil" ? (usuario ? usuario.nome + " " + usuario.sobrenome : "Perfil")
+                  : pagina === "atividades" ? "Biblioteca antes/depois"
                   : "Métricas gerais"}
               </h1>
               <p className="mt-0.5 text-[12px]" style={{ color: p.textoTerciario }}>
@@ -5134,6 +5578,10 @@ ${reportText}`;
         )}
 
         {/* Telas */}
+        {pagina === "atividades" && usuario && (
+          <PaginaAtividades usuario={usuario} p={p} tema={tema} />
+        )}
+
         {pagina === "perfil" && (
           <TelaPerfil
             usuario={usuario}
